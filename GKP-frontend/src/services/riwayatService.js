@@ -1,19 +1,34 @@
-// Service layer untuk Riwayat Aktivitas (audit trail).
-//
-// Sama seperti barangService, fungsi di sini adalah PURE FUNCTION (stateless).
-// State sesungguhnya dipegang oleh React useState di App.jsx.
+function pad(n) {
+  return String(n).padStart(2, '0')
+}
 
-export function buatEntriRiwayat({ jenis, sku, nama, keterangan, oleh = 'Admin' }) {
+export function buatEntriRiwayat({
+  jenis,
+  sku,
+  nama,
+  keterangan,
+  oleh = 'Admin',
+  tanggalTransaksi,
+  jumlah,
+  kloter,
+}) {
   const now = new Date()
+  const tanggal = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+  const waktu = `${pad(now.getHours())}:${pad(now.getMinutes())}`
+
   return {
-    id: Date.now(),
-    tanggal: now.toISOString().slice(0, 10),
-    waktu: now.toTimeString().slice(0, 5),
+    id: `${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`,
+    tanggal,
+    waktu,
     jenis,
-    sku,
-    nama,
-    keterangan,
+    sku: sku ?? '-',
+    nama: nama ?? '-',
+    keterangan: keterangan ?? '',
     oleh,
+    tanggalTransaksi: tanggalTransaksi || tanggal,
+    jumlah: jumlah ?? null,
+    kloter: kloter ?? null,
+    dibuatPada: now.getTime(),
   }
 }
 
@@ -22,5 +37,11 @@ export function tambahRiwayat(list, entry) {
 }
 
 export function sortRiwayatTerbaru(list) {
-  return [...list].sort((a, b) => (a.tanggal + a.waktu < b.tanggal + b.waktu ? 1 : -1))
+  return [...list].sort((a, b) => {
+    const waktuA = `${a.tanggal ?? ''} ${a.waktu ?? ''}`
+    const waktuB = `${b.tanggal ?? ''} ${b.waktu ?? ''}`
+
+    if (waktuA !== waktuB) return waktuA < waktuB ? 1 : -1
+    return (b.dibuatPada ?? 0) - (a.dibuatPada ?? 0)
+  })
 }

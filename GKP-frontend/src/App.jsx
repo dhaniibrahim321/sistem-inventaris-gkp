@@ -9,6 +9,7 @@ import PergerakanPage from './pages/PergerakanPage'
 import StokPage from './pages/StokPage'
 import StockOpnamePage from './pages/StockOpnamePage'
 import RiwayatPage from './pages/RiwayatPage'
+import SettingsPage from './pages/SettingsPage'
 
 function App() {
   // Pure React State (useState) sebagai satu-satunya penyimpanan data.
@@ -32,7 +33,13 @@ function App() {
           />
           <Route
             path="/barang"
-            element={<BarangPage barang={barang} setBarang={setBarang} />}
+            element={
+              <BarangPage
+                barang={barang}
+                setBarang={setBarang}
+                setRiwayat={setRiwayat}
+              />
+            }
           />
           <Route
             path="/barang-masuk"
@@ -54,7 +61,16 @@ function App() {
               />
             }
           />
-          <Route path="/stok" element={<StokPage barang={barang} />} />
+          <Route
+            path="/stok"
+            element={
+              <StokPage
+                barang={barang}
+                setBarang={setBarang}
+                setRiwayat={setRiwayat}
+              />
+            }
+          />
           <Route
             path="/stock-opname"
             element={
@@ -66,6 +82,7 @@ function App() {
             }
           />
           <Route path="/riwayat" element={<RiwayatPage riwayat={riwayat} />} />
+          <Route path="/pengaturan" element={<SettingsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -12,13 +12,15 @@ import {
   X,
 } from 'lucide-react'
 
+import logoGKP from '../../assets/logo_GKP.png'
+
 const menuItems = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { label: 'Kelola Data Barang', path: '/barang', icon: Package },
   { label: 'Pencatatan Barang', path: '/barang-masuk', icon: PackagePlus },
   { label: 'Pergerakan Barang', path: '/pergerakan', icon: ArrowLeftRight },
   { label: 'Stok Barang', path: '/stok', icon: BarChart3 },
-  { label: 'Stock Opname', path: '/stock-opname', icon: ClipboardCheck },
+  { label: 'Stok Opname', path: '/stock-opname', icon: ClipboardCheck },
   { label: 'Riwayat Aktivitas', path: '/riwayat', icon: History },
 ]
 
@@ -26,13 +28,11 @@ export default function Sidebar({ isOpen = false, onClose }) {
   const navigate = useNavigate()
 
   const handleLogout = () => {
-    // Prototype: langsung kembali ke halaman login
     navigate('/')
   }
 
   return (
     <>
-      {/* Overlay backdrop, hanya tampil di mobile saat sidebar terbuka */}
       {isOpen && (
         <div
           className="fixed inset-0 bg-slate-900/50 z-40 lg:hidden"
@@ -49,13 +49,15 @@ export default function Sidebar({ isOpen = false, onClose }) {
           lg:translate-x-0
         `}
       >
-        {/* Logo */}
         <div className="px-6 py-5 border-b border-black/10 flex items-center justify-between">
-          <div className="flex flex-col items-center gap-3">
+          <div className="flex items-center gap-3">
             <img
-              src="src/assets/logo_GKP.png" alt="Logo SIGKP" className="h-20 object-contain"/>
+              src={logoGKP}
+              alt="Logo SIGKP"
+              className="h-10 w-10 rounded-md object-cover"
+            />
             <div>
-              <h2 className="text-sm font-bold leading-tight text-slate-900"></h2>
+              <h2 className="text-sm font-bold leading-tight text-slate-900">SIGKP</h2>
               <p className="text-xs text-slate-700">Inventaris Gudang</p>
             </div>
           </div>
@@ -69,7 +71,6 @@ export default function Sidebar({ isOpen = false, onClose }) {
           </button>
         </div>
 
-        {/* Navigation Menu */}
         <nav aria-label="Menu navigasi utama" className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
           {menuItems.map((item) => (
             <NavLink
@@ -90,7 +91,6 @@ export default function Sidebar({ isOpen = false, onClose }) {
           ))}
         </nav>
 
-        {/* User Profile & Logout */}
         <div className="border-t border-black/10 px-4 py-4">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-9 h-9 rounded-full bg-white/40 flex items-center justify-center">

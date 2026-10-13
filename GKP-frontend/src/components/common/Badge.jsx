@@ -3,6 +3,8 @@ const variants = {
   warning: 'bg-amber-100 text-amber-700',
   danger: 'bg-rose-100 text-rose-700',
   default: 'bg-slate-100 text-slate-700',
+  info: 'bg-sky-100 text-sky-700',
+  purple: 'bg-violet-100 text-violet-700',
 }
 
 export default function Badge({ children, variant = 'default', className = '' }) {

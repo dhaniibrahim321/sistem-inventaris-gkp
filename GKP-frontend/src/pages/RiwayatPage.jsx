@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Search } from 'lucide-react'
 import { Select, Badge, Table } from '../components/common'
 import { sortRiwayatTerbaru } from '../services/riwayatService'
@@ -6,25 +7,35 @@ import { jenisAktivitasList } from '../services/data/riwayatData'
 import { formatTanggal } from '../utils/dateHelpers'
 
 const jenisBadge = {
+  barang: <Badge variant="info">Kelola Data Barang</Badge>,
   masuk: <Badge variant="success">Barang Masuk</Badge>,
-  pergerakan: <Badge variant="default">Pergerakan</Badge>,
-  opname: <Badge variant="warning">Stock Opname</Badge>,
+  pergerakan: <Badge variant="default">Pergerakan Barang</Badge>,
+  stok: <Badge variant="purple">Penyesuaian Stok</Badge>,
+  opname: <Badge variant="warning">Stok Opname</Badge>,
 }
 
 export default function RiwayatPage({ riwayat }) {
-  const [tanggalMulai, setTanggalMulai] = useState('')
-  const [tanggalAkhir, setTanggalAkhir] = useState('')
-  const [jenisFilter, setJenisFilter] = useState('')
-  const [skuFilter, setSkuFilter] = useState('')
+  const { state: lokasiState } = useLocation()
+  const asal = lokasiState?.dariDashboard ? lokasiState : null
+
+  const [tanggalMulai, setTanggalMulai] = useState(asal?.tanggalMulai ?? '')
+  const [tanggalAkhir, setTanggalAkhir] = useState(asal?.tanggalAkhir ?? '')
+  const [jenisFilter, setJenisFilter] = useState(asal?.jenis ?? '')
+  const [skuFilter, setSkuFilter] = useState(asal?.sku ?? '')
+  const [dariDashboard, setDariDashboard] = useState(Boolean(asal))
+  const [skuPersis, setSkuPersis] = useState(asal?.sku ?? '')
 
   const filteredLog = sortRiwayatTerbaru(riwayat).filter((log) => {
-    const matchMulai = !tanggalMulai || log.tanggal >= tanggalMulai
-    const matchAkhir = !tanggalAkhir || log.tanggal <= tanggalAkhir
+    const tgl = dariDashboard ? log.tanggalTransaksi || log.tanggal : log.tanggal
+    const matchMulai = !tanggalMulai || tgl >= tanggalMulai
+    const matchAkhir = !tanggalAkhir || tgl <= tanggalAkhir
     const matchJenis = !jenisFilter || log.jenis === jenisFilter
-    const matchSku =
-      !skuFilter.trim() ||
-      log.sku.toLowerCase().includes(skuFilter.trim().toLowerCase()) ||
-      log.nama.toLowerCase().includes(skuFilter.trim().toLowerCase())
+    const keyword = skuFilter.trim().toLowerCase()
+    const matchSku = skuPersis
+      ? log.sku === skuPersis
+      : !keyword ||
+        String(log.sku ?? '').toLowerCase().includes(keyword) ||
+        String(log.nama ?? '').toLowerCase().includes(keyword)
     return matchMulai && matchAkhir && matchJenis && matchSku
   })
 
@@ -33,6 +44,8 @@ export default function RiwayatPage({ riwayat }) {
     setTanggalAkhir('')
     setJenisFilter('')
     setSkuFilter('')
+    setSkuPersis('')
+    setDariDashboard(false)
   }
 
   const filterActive = tanggalMulai || tanggalAkhir || jenisFilter || skuFilter
@@ -47,7 +60,7 @@ export default function RiwayatPage({ riwayat }) {
     {
       key: 'jenis',
       label: 'Jenis Aktivitas',
-      render: (value) => jenisBadge[value],
+      render: (value) => jenisBadge[value] ?? value,
     },
     { key: 'sku', label: 'SKU' },
     { key: 'nama', label: 'Nama Barang' },
@@ -57,15 +70,14 @@ export default function RiwayatPage({ riwayat }) {
 
   return (
     <div className="space-y-6">
-      {/* Page Heading */}
       <header>
-        <h1 className="text-xl font-semibold text-slate-800">Riwayat Aktivitas</h1>
+        <h1 className="text-2xl font-bold text-gray-800">Riwayat Aktivitas</h1>
         <p className="text-sm text-slate-500 mt-0.5">
-          Audit trail seluruh transaksi barang masuk, pergerakan, dan stock opname.
+          Catatan seluruh aktivitas: kelola data barang, barang masuk, pergerakan barang,
+          penyesuaian stok, dan stok opname.
         </p>
       </header>
 
-      {/* Toolbar: Filter Multi-parameter */}
       <section aria-label="Filter riwayat aktivitas" className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
@@ -104,7 +116,10 @@ export default function RiwayatPage({ riwayat }) {
                 id="riwayat-sku"
                 type="text"
                 value={skuFilter}
-                onChange={(e) => setSkuFilter(e.target.value)}
+                onChange={(e) => {
+                  setSkuFilter(e.target.value)
+                  setSkuPersis('')
+                }}
                 placeholder="Cari SKU / nama..."
                 className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500"
               />
@@ -125,7 +140,16 @@ export default function RiwayatPage({ riwayat }) {
         )}
       </section>
 
-      {/* Table */}
+      {dariDashboard && (
+        <p className="rounded-lg bg-[#EDEAFF] px-3 py-2 text-xs text-[#5B528D]">
+          Menampilkan {filteredLog.length} aktivitas dari Dashboard (
+          {jenisFilter === 'masuk'
+            ? 'Perputaran Barang Gudang'
+            : 'Perputaran Barang Display'}
+          ). Tekan "Reset Filter" untuk melihat semua aktivitas.
+        </p>
+      )}
+
       <section aria-label="Tabel riwayat aktivitas">
         <Table columns={columns} data={filteredLog} />
       </section>

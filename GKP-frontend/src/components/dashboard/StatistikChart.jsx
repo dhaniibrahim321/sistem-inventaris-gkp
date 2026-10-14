@@ -2,6 +2,7 @@ const JUMLAH_GARIS = 4
 const TINGGI_PLOT = 200
 const LEBAR_KOLOM_MIN = 48
 
+// Skala sumbu Y dengan kelipatan 1 / 2 / 5 / 10 supaya angkanya bulat.
 function hitungSkala(maxData) {
   if (maxData <= 0) return { step: 1, max: JUMLAH_GARIS }
 
@@ -44,6 +45,8 @@ function Batang({ nilai, max, warna, nama }) {
   )
 }
 
+// data: [{ tanggal: 'YYYY-MM-DD', gudang, display }] — satu entri untuk
+// SETIAP tanggal pada rentang, supaya bisa dibandingkan tanggal ke tanggal.
 export default function StatistikChart({ data }) {
   const maxData = Math.max(0, ...data.flatMap((d) => [d.gudang, d.display]))
   const { step, max } = hitungSkala(maxData)
@@ -54,6 +57,7 @@ export default function StatistikChart({ data }) {
       <p className="text-[10px] text-slate-400 mb-1.5 pl-1">Jumlah (pcs)</p>
 
       <div className="flex">
+        {/* SUMBU Y: angka jumlah di sisi kiri */}
         <div
           className="relative w-9 shrink-0"
           style={{ height: TINGGI_PLOT }}
@@ -70,9 +74,11 @@ export default function StatistikChart({ data }) {
           ))}
         </div>
 
+        {/* AREA GRAFIK (bisa digeser mendatar jika tanggalnya banyak) */}
         <div className="flex-1 overflow-x-auto">
           <div style={{ minWidth: data.length * LEBAR_KOLOM_MIN }}>
             <div className="relative" style={{ height: TINGGI_PLOT }}>
+              {/* Garis putus-putus penanda jumlah */}
               {garis.map((nilai, i) => (
                 <div
                   key={nilai}
@@ -107,6 +113,7 @@ export default function StatistikChart({ data }) {
               </div>
             </div>
 
+            {/* SUMBU X: tanggal di bawah grafik */}
             <div className="flex mt-2">
               {data.map((d) => (
                 <p

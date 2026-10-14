@@ -39,7 +39,7 @@ export default function Table({
                     key={col.key}
                     className="px-4 py-3 text-slate-700 whitespace-nowrap"
                   >
-                    {col.render ? col.render(row[col.key], row) : row[col.key]}
+                    {col.render ? col.render(row[col.key], row, rowIndex) : row[col.key]}
                   </td>
                 ))}
               </tr>

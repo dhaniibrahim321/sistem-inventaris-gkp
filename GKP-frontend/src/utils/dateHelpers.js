@@ -34,6 +34,9 @@ export function sisaHari(dateStr, today = new Date()) {
 
 // Tanggal hari ini dalam format "YYYY-MM-DD", dipakai sebagai default value
 // input type="date" di form-form transaksi.
+// Memakai tanggal lokal (bukan UTC) agar di WIB tidak mundur sehari sebelum jam 07.00.
 export function todayISOString(date = new Date()) {
-  return date.toISOString().slice(0, 10)
+  const bulan = String(date.getMonth() + 1).padStart(2, '0')
+  const hari = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${bulan}-${hari}`
 }

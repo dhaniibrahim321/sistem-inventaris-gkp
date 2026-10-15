@@ -1,86 +1,63 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { User, Lock } from 'lucide-react'
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import logoGKP from '../assets/logo_GKP.png';
 
 export default function LoginPage() {
-  const navigate = useNavigate()
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const navigate = useNavigate();
 
   const handleLogin = (e) => {
-    e.preventDefault()
-    // Prototype: langsung navigasi ke dashboard tanpa validasi
-    navigate('/dashboard')
-  }
+    e.preventDefault();
+    // Simulasi login sukses langsung ke dashboard
+    navigate('/dashboard');
+  };
 
   return (
-    <main className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-sm flex flex-col items-center">
-        {/* Card Login */}
-        <section
-          aria-label="Form login"
-          className="w-full bg-[#C2B6FE] rounded-[2rem] shadow-lg px-8 pt-10 pb-10"
-        >
-          {/* Logo */}
-          <div className="flex justify-center mb-8">
-            <img src="src/assets/logo_GKP.png" className="h-20 object-contain"/>
+    <div className="min-h-screen flex items-center justify-center bg-slate-100">
+      <div className="bg-[#C2B6FE] p-8 rounded-3xl shadow-lg w-full max-w-md flex flex-col items-center">
+        
+        {/* Bagian Logo */}
+        <div className="mb-6 flex flex-col items-center">
+          <img 
+            src={logoGKP} 
+            alt="Logo SIGKP" 
+            className="h-30 w-30 rounded-lg object-contain mb-2"
+          />
+        </div>
+
+        <form onSubmit={handleLogin} className="w-full space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-slate-800 mb-1">Username</label>
+            <input 
+              type="text" 
+              placeholder="Masukkan username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-full bg-white text-slate-800 focus:outline-none"
+            />
           </div>
 
-          {/* Form */}
-          <form id="login-form" onSubmit={handleLogin} className="space-y-5">
-            <div>
-              <label
-                htmlFor="username"
-                className="block text-base font-bold text-slate-900 mb-2"
-              >
-                Username
-              </label>
-              <div className="relative">
-                <input
-                  id="username"
-                  name="username"
-                  type="text"
-                  placeholder="Masukkan username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full pl-5 pr-12 py-3 rounded-full bg-white text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#5B528D] transition-shadow"
-                />
-                <User size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              </div>
-            </div>
+          <div>
+            <label className="block text-sm font-semibold text-slate-800 mb-1">Password</label>
+            <input 
+              type="password" 
+              placeholder="Masukkan password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-full bg-white text-slate-800 focus:outline-none"
+            />
+          </div>
 
-            <div>
-              <label
-                htmlFor="password"
-                className="block text-base font-bold text-slate-900 mb-2"
-              >
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  placeholder="Masukkan password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-5 pr-12 py-3 rounded-full bg-white text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-[#5B528D] transition-shadow"
-                />
-                <Lock size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              </div>
-            </div>
-          </form>
-        </section>
+          <button 
+            type="submit"
+            className="w-full mt-4 py-2.5 rounded-full bg-white/80 hover:bg-white text-slate-800 font-bold shadow transition"
+          >
+            Login
+          </button>
+        </form>
 
-        {/* Tombol Login - di luar card, warna lebih muda */}
-        <button
-          type="submit"
-          form="login-form"
-          className="mt-6 px-12 py-3 rounded-full bg-[#E4DFFB] text-slate-900 font-semibold text-sm shadow-md hover:bg-[#d4ccf7] focus:outline-none focus:ring-2 focus:ring-[#5B528D] transition-colors"
-        >
-          Login
-        </button>
       </div>
-    </main>
-  )
+    </div>
+  );
 }

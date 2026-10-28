@@ -240,12 +240,6 @@ export default function BarangMasukPage({
         </p>
       </div>
 
-      {successMessage && (
-        <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-          <CheckCircle2 size={20} />
-          <span>{successMessage}</span>
-        </div>
-      )}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         {/* ===================================
@@ -642,6 +636,13 @@ export default function BarangMasukPage({
                       </div>
                     </div>
 
+                    {successMessage && (
+                      <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                        <CheckCircle2 size={20} className="shrink-0" />
+                        <span>{successMessage}</span>
+                      </div>
+                    )}
+                    
                     <button
                       type="submit"
                       className="w-full rounded-lg bg-[#5B528D] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#4a4275] focus:outline-none focus:ring-2 focus:ring-[#C2B6FE]"

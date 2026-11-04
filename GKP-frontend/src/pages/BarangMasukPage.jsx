@@ -13,11 +13,7 @@ import {
   Layers,
 } from 'lucide-react'
 
-import {
-  buatEntriRiwayat,
-  tambahRiwayat,
-} from '../services/riwayatService'
-import { tambahKloterBarang } from '../services/barangService'
+import { simpanBarangMasuk } from '../services/api'
 import {
   getStokView,
   nomorKloterBerikutnya,
@@ -36,8 +32,7 @@ function FieldError({ children }) {
 
 export default function BarangMasukPage({
   barang = [],
-  setBarang,
-  setRiwayat,
+  refreshData,
 }) {
   /* =========================================
      PILIH BARANG
@@ -161,7 +156,7 @@ export default function BarangMasukPage({
      SUBMIT
   ========================================== */
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
 
     const errs = validate()
@@ -174,58 +169,31 @@ export default function BarangMasukPage({
 
     const jumlahMasuk = Number(jumlah)
 
-    // Kloter baru: seluruh barang masuk berada di gudang (stokDisplay 0).
-    // jumlahAwal = TOTAL kloter dan tidak berubah oleh pergerakan/pengurangan.
-    const kloterBaru = {
-      id: Date.now(),
-      nomor: kloterBerikutnya,
-      jumlah: jumlahMasuk,
-      jumlahAwal: jumlahMasuk,
-      stokGudang: jumlahMasuk,
-      stokDisplay: 0,
-      tanggalMasuk,
-      tanggalKadaluarsa,
-      lokasiRak,
-      catatan,
-    }
+    try {
+      await simpanBarangMasuk({
+        id_barang: selectedItem.id,
+        nomor_kloter: kloterBerikutnya,
+        jumlah: jumlahMasuk,
+        tanggal_masuk: tanggalMasuk,
+        tanggal_kedaluwarsa: tanggalKadaluarsa,
+        lokasi_rak: lokasiRak.trim(),
+        catatan: catatan.trim(),
+      })
 
-    setBarang((prev) => tambahKloterBarang(prev, selectedItem.id, kloterBaru))
+      if (refreshData) {
+        await refreshData()
+      }
 
-    const catatanTrim = catatan.trim()
-
-    // Keterangan diawali jumlah (+N) karena Dashboard membaca angka pada
-    // riwayat untuk grafik barang masuk gudang.
-    setRiwayat((prev) =>
-      tambahRiwayat(
-        prev,
-        buatEntriRiwayat({
-          jenis: 'masuk',
-          sku: selectedItem.sku,
-          nama: selectedItem.nama,
-          tanggalTransaksi: tanggalMasuk,
-          jumlah: jumlahMasuk,
-          kloter: kloterBerikutnya,
-          keterangan:
-            `Barang masuk +${jumlahMasuk} ${satuan} (Kloter ${kloterBerikutnya}). ` +
-            `Lokasi rak: ${lokasiRak.trim()}. ` +
-            `Tanggal masuk: ${tanggalMasuk}. ` +
-            `Tanggal kedaluwarsa: ${tanggalKadaluarsa}. ` +
-            `Stok gudang ${stokView.gudang} → ${stokView.gudang + jumlahMasuk}.` +
-            (catatanTrim ? ` Catatan: ${catatanTrim}` : ''),
-        })
+      setSuccessMessage(
+        `${jumlahMasuk} ${satuan} "${selectedItem.nama}" (Kloter ${kloterBerikutnya}) berhasil ditambahkan ke stok gudang.`
       )
-    )
 
-    setSuccessMessage(
-      `${jumlahMasuk} ${satuan} "${selectedItem.nama}" (Kloter ${kloterBerikutnya}) berhasil ditambahkan ke stok gudang.`
-    )
-
-    resetForm()
+      resetForm()
+    } catch (error) {
+      setErrors({ submit: error.message || 'Gagal menyimpan barang masuk.' })
+      setSuccessMessage('')
+    }
   }
-
-  /* =========================================
-     RENDER
-  ========================================== */
 
   return (
     <div className="space-y-6">
@@ -635,6 +603,10 @@ export default function BarangMasukPage({
                         />
                       </div>
                     </div>
+
+                    {errors.submit && (
+                      <p className="text-sm text-red-600">{errors.submit}</p>
+                    )}
 
                     {successMessage && (
                       <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">

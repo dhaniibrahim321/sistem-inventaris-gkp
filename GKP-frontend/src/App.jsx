@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+
 import MainLayout from './components/layout/MainLayout'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
@@ -11,26 +12,45 @@ import StockOpnamePage from './pages/StockOpnamePage'
 import RiwayatPage from './pages/RiwayatPage'
 import SettingsPage from './pages/SettingsPage'
 
+import { getBarang, getRiwayat } from './services/api'
+
 function App() {
-  // Pure React State (useState) sebagai satu-satunya penyimpanan data.
-  // Sengaja diawali array kosong ([]) tanpa data dummy, dan TIDAK disimpan
-  // ke localStorage/sessionStorage apa pun — refresh halaman otomatis
-  // mengembalikan seluruh data ke kondisi kosong sesuai ketentuan revisi.
   const [barang, setBarang] = useState([])
   const [riwayat, setRiwayat] = useState([])
+
+  // Mengambil data dari database
+  async function refreshData() {
+    const [dataBarang, dataRiwayat] = await Promise.all([
+      getBarang(),
+      getRiwayat(),
+    ])
+
+    setBarang(dataBarang)
+    setRiwayat(dataRiwayat)
+  }
+
+  useEffect(() => {
+    refreshData().catch((error) => {
+      console.error('Gagal mengambil data:', error)
+    })
+  }, [])
 
   return (
     <BrowserRouter>
       <Routes>
-        {/* Login - tanpa layout */}
         <Route path="/" element={<LoginPage />} />
 
-        {/* Halaman dengan MainLayout (Sidebar + Header) */}
         <Route element={<MainLayout />}>
           <Route
             path="/dashboard"
-            element={<DashboardPage barang={barang} riwayat={riwayat} />}
+            element={
+              <DashboardPage
+                barang={barang}
+                riwayat={riwayat}
+              />
+            }
           />
+
           <Route
             path="/barang"
             element={
@@ -38,29 +58,31 @@ function App() {
                 barang={barang}
                 setBarang={setBarang}
                 setRiwayat={setRiwayat}
+                refreshData={refreshData}
               />
             }
           />
+
           <Route
             path="/barang-masuk"
             element={
               <BarangMasukPage
                 barang={barang}
-                setBarang={setBarang}
-                setRiwayat={setRiwayat}
+                refreshData={refreshData}
               />
             }
           />
+
           <Route
             path="/pergerakan"
             element={
               <PergerakanPage
                 barang={barang}
-                setBarang={setBarang}
-                setRiwayat={setRiwayat}
+                refreshData={refreshData}
               />
             }
           />
+
           <Route
             path="/stok"
             element={
@@ -71,6 +93,7 @@ function App() {
               />
             }
           />
+
           <Route
             path="/stock-opname"
             element={
@@ -81,8 +104,16 @@ function App() {
               />
             }
           />
-          <Route path="/riwayat" element={<RiwayatPage riwayat={riwayat} />} />
-          <Route path="/pengaturan" element={<SettingsPage />} />
+
+          <Route
+            path="/riwayat"
+            element={<RiwayatPage riwayat={riwayat} />}
+          />
+
+          <Route
+            path="/pengaturan"
+            element={<SettingsPage />}
+          />
         </Route>
       </Routes>
     </BrowserRouter>

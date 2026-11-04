@@ -13,11 +13,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 
-import {
-  buatEntriRiwayat,
-  tambahRiwayat,
-} from "../services/riwayatService";
-import { transferKloterGudangKeDisplay } from "../services/barangService";
+import { simpanPergerakan } from "../services/api";
 import {
   getKloterList,
   getStokView,
@@ -30,8 +26,7 @@ import {
 
 export default function PergerakanPage({
   barang = [],
-  setBarang,
-  setRiwayat,
+  refreshData,
 }) {
   // Dashboard (Stok Kritis Display) membawa { barangId } lewat navigasi,
   // sehingga barang yang diklik langsung terpilih di halaman ini.
@@ -115,7 +110,7 @@ export default function PergerakanPage({
     setCatatan("");
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     setError("");
@@ -140,8 +135,8 @@ export default function PergerakanPage({
 
     const jumlahTransfer = Number(jumlah);
 
-    if (!jumlah || jumlahTransfer <= 0) {
-      setError("Jumlah barang yang dipindahkan harus lebih dari 0.");
+    if (!jumlah || !Number.isInteger(jumlahTransfer) || jumlahTransfer <= 0) {
+      setError("Jumlah barang yang dipindahkan harus berupa bilangan bulat lebih dari 0.");
       return;
     }
 
@@ -162,59 +157,32 @@ export default function PergerakanPage({
       return;
     }
 
-    if (setBarang) {
-      setBarang((prev) =>
-        transferKloterGudangKeDisplay(
-          prev,
-          selectedBarang.id,
-          stokView.kloter.id,
-          jumlahTransfer
-        )
+    const catatanTrim = catatan.trim();
+
+    try {
+      await simpanPergerakan({
+        id_kloter: stokView.kloter.id,
+        jumlah: jumlahTransfer,
+        tanggal,
+        letak_rak: rakDisplay.trim(),
+        catatan: catatanTrim,
+      });
+
+      // Ambil ulang stok dan riwayat dari database setelah transaksi berhasil.
+      if (refreshData) {
+        await refreshData();
+      }
+
+      setSuccess(
+        `${jumlahTransfer} barang (Kloter ${stokView.kloter.nomor}) berhasil dipindahkan dari Gudang ke Display.`
       );
+
+      setJumlah("");
+      setRakDisplay("");
+      setCatatan("");
+    } catch (err) {
+      setError(err.message || "Gagal menyimpan pergerakan barang.");
     }
-
-    if (setRiwayat) {
-      const namaBarang =
-        selectedBarang.nama ||
-        selectedBarang.namaBarang ||
-        selectedBarang.name ||
-        "-";
-
-      const sku = selectedBarang.sku || "-";
-      const satuan = selectedBarang.satuan || "pcs";
-      const catatanTrim = catatan.trim();
-
-      // Keterangan diawali jumlah (+N) karena Dashboard membaca angka pertama
-      // pada keterangan untuk grafik pergerakan gudang -> display.
-      setRiwayat((prev) =>
-        tambahRiwayat(
-          prev,
-          buatEntriRiwayat({
-            jenis: "pergerakan",
-            sku,
-            nama: namaBarang,
-            tanggalTransaksi: tanggal,
-            jumlah: jumlahTransfer,
-            kloter: stokView.kloter.nomor,
-            keterangan:
-              `Dipindahkan +${jumlahTransfer} ${satuan} dari Gudang ke Display (Kloter ${stokView.kloter.nomor}). ` +
-              `Rak display: ${rakDisplay.trim()}. ` +
-              `Tanggal pengisian: ${tanggal}. ` +
-              `Stok gudang ${stokGudang} → ${stokGudang - jumlahTransfer}, ` +
-              `display ${stokDisplay} → ${stokDisplay + jumlahTransfer}.` +
-              (catatanTrim ? ` Catatan: ${catatanTrim}` : ""),
-          })
-        )
-      );
-    }
-
-    setSuccess(
-      `${jumlahTransfer} barang (Kloter ${stokView.kloter.nomor}) berhasil dipindahkan dari Gudang ke Display.`
-    );
-
-    setJumlah("");
-    setRakDisplay("");
-    setCatatan("");
   };
 
   return (

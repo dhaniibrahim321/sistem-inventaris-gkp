@@ -77,3 +77,20 @@ CREATE TABLE IF NOT EXISTS stok_opname (
   FOREIGN KEY (id_user) REFERENCES users(id_user) ON DELETE RESTRICT,
   INDEX idx_opname_tgl (tanggal_opname)
 ) ENGINE=InnoDB;
+
+-- [Nawaf] Log penyesuaian manual & pengurangan stok display (halaman Stok Barang).
+CREATE TABLE IF NOT EXISTS log_stok (
+  id_log_stok INT AUTO_INCREMENT PRIMARY KEY,
+  id_kloter INT NOT NULL,
+  jenis ENUM('penyesuaian','pengurangan') NOT NULL,
+  stok_gudang_lama INT NOT NULL,
+  stok_display_lama INT NOT NULL,
+  stok_gudang_baru INT NOT NULL,
+  stok_display_baru INT NOT NULL,
+  catatan TEXT NULL,
+  id_user INT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (id_kloter) REFERENCES kloter_stok(id_kloter) ON DELETE RESTRICT,
+  FOREIGN KEY (id_user) REFERENCES users(id_user) ON DELETE RESTRICT,
+  INDEX idx_log_stok_created (created_at)
+) ENGINE=InnoDB;

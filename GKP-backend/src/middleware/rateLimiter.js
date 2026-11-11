@@ -7,8 +7,9 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: {
-    success: false,
+    status: 'error',
     message: 'Terlalu banyak permintaan dari perangkat Anda. Silakan coba lagi setelah 15 menit.',
+    data: null,
   },
 })
 
@@ -21,8 +22,9 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
   skipSuccessfulRequests: true,
   message: {
-    success: false,
+    status: 'error',
     message: 'Terlalu banyak percobaan login yang gagal. Akun dikunci sementara selama 15 menit demi keamanan.',
+    data: null,
   },
 })
 

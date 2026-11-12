@@ -26,10 +26,13 @@ const menuItems = [
 
 export default function Sidebar({ isOpen = false, onClose }) {
   const navigate = useNavigate()
+  const user = JSON.parse(localStorage.getItem('user') || '{}')
 
-  const handleLogout = () => {
-    navigate('/')
-  }
+const handleLogout = () => {
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
+  navigate('/', { replace: true })
+}
 
   return (
     <>
@@ -97,8 +100,12 @@ export default function Sidebar({ isOpen = false, onClose }) {
               <User size={18} className="text-slate-800" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-900">User</p>
-              <p className="text-xs text-slate-700">Role User</p>
+              <p className="text-sm font-medium text-slate-900">
+                {user.nama || 'Admin'}
+              </p>
+              <p className="text-xs text-slate-700">
+                {user.role || 'Admin Gudang'}
+              </p>
             </div>
           </div>
           <button

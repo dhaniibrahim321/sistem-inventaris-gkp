@@ -4,6 +4,7 @@ import { formatTanggalIndonesia } from '../../utils/dateHelpers'
 
 export default function Header({ onMenuClick }) {
   const navigate = useNavigate()
+  const user = JSON.parse(localStorage.getItem('user') || '{}')
 
   return (
     <header className="sticky top-0 z-30 bg-white border-b border-slate-200 px-4 sm:px-6 py-4">
@@ -39,10 +40,10 @@ export default function Header({ onMenuClick }) {
           <div className="flex items-center gap-3">
             <div className="text-right hidden sm:block">
               <p className="text-sm font-medium text-slate-700">
-                User
+                {user.nama || 'Admin'}
               </p>
               <p className="text-xs text-slate-400">
-                Role User
+                {user.role || 'Admin Gudang'}
               </p>
             </div>
 

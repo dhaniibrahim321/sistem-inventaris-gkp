@@ -11,6 +11,7 @@ router.get('/health', (req, res) => sendSuccess(res, { message: 'SIGKP API berja
 const routes = [
   { prefix: '/auth', file: './authRoutes.js' },
   { prefix: '/barang', file: './barang.js' },
+  { prefix: '/riwayat', file: './riwayatRoutes.js' },
   { prefix: '/barang-masuk', file: './barangMasukRoutes.js' },
   { prefix: '/pergerakan', file: './pergerakanRoutes.js' },
   { prefix: '/kloter', file: './kloterRoutes.js' },

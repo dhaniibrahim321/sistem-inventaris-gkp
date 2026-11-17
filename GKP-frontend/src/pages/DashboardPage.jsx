@@ -669,23 +669,24 @@ export default function DashboardPage({ barang = [], riwayat = [] }) {
 
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
-        <p className="mt-0.5 text-sm text-slate-500">
-          Ringkasan kondisi inventaris gudang hari ini.
-        </p>
-      </header>
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
+          <p className="mt-0.5 text-sm text-slate-500">
+            Ringkasan kondisi inventaris gudang hari ini.
+          </p>
+        </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[190px_minmax(0,1fr)]">
+        {/* Kotak Total Jenis Barang dipindah ke samping kanan header */}
         <section
           aria-label="Total jenis barang"
-          className="self-start rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+          className="rounded-xl border border-slate-200 bg-white px-5 py-3 shadow-sm min-w-[210px]"
         >
           <h2 className="text-xs font-semibold text-slate-700">
             Total Jenis Barang
           </h2>
-          <div className="mt-3 flex items-end justify-between">
-            <p className="text-3xl font-bold text-slate-800">
+          <div className="mt-1 flex items-end justify-between gap-4">
+            <p className="text-2xl font-bold text-slate-800">
               {apiData.ringkasan?.total_barang ?? barang.length}
               <span className="ml-1.5 text-xs font-semibold text-slate-400">
                 SKU
@@ -696,11 +697,12 @@ export default function DashboardPage({ barang = [], riwayat = [] }) {
             </div>
           </div>
         </section>
+      </header>
 
-        <section
-          aria-label="Statistik perputaran barang"
-          className="min-w-0 rounded-xl border border-violet-100 bg-violet-100/70 p-3 shadow-sm"
-        >
+      <section
+        aria-label="Statistik perputaran barang"
+        className="w-full min-w-0 rounded-xl border border-violet-100 bg-violet-100/70 p-3 shadow-sm"
+      >
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
             <h2 className="text-base font-bold text-slate-800">
               {buatJudulRentang(startDate, endDate)}
@@ -894,7 +896,6 @@ export default function DashboardPage({ barang = [], riwayat = [] }) {
             </div>
           </div>
         </section>
-      </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <PanelDaftar

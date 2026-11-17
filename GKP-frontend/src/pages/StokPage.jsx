@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
+import * as stokService from '../services/stokService'
 import {
   Search,
   Pencil,
@@ -91,12 +92,55 @@ export default function StokBarangPage({
   setBarang,
   setRiwayat,
 }) {
+  const [dbBarang, setDbBarang] = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  const muatDataStok = async () => {
+    try {
+      setLoading(true)
+      const res = await stokService.getDaftarStok({ limit: 200 })
+      if (res && Array.isArray(res.data)) {
+        const mapped = res.data.map((b) => ({
+          id: b.id_barang,
+          sku: b.sku,
+          nama: b.nama_barang,
+          kategori: b.kategori,
+          gambar: b.foto_url,
+          stokGudang: Number(b.stok_gudang || 0),
+          stokDisplay: Number(b.stok_display || 0),
+          totalStok: Number(b.total_stok || 0),
+          kloter: (b.kloter || []).map((k) => ({
+            id: k.id_kloter,
+            nomor: String(k.nama_kloter || '').replace(/[^0-9]/g, '') || k.nama_kloter || 1,
+            namaKloter: k.nama_kloter,
+            tanggalKadaluarsa: k.tanggal_kedaluwarsa,
+            stokGudang: Number(k.stok_gudang || 0),
+            stokDisplay: Number(k.stok_display || 0),
+            jumlahAwal: Number(k.jumlah_awal || (k.stok_gudang + k.stok_display) || 0),
+            sisaHari: k.sisa_hari,
+          })),
+        }))
+        setDbBarang(mapped)
+      }
+    } catch (err) {
+      console.warn('Gagal memuat daftar stok dari backend:', err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    muatDataStok()
+  }, [])
+
+  const barangAktif = dbBarang ?? barang
+
   // Dashboard (Mendekati Kedaluwarsa) membawa { barangId, kloterId } lewat
   // navigasi: barang & kloter itu langsung disorot supaya bisa diedit atau
   // dihapus.
   const location = useLocation()
   const barangFokusAwal =
-    barang.find((item) => item.id === location.state?.barangId) || null
+    barangAktif.find((item) => item.id === location.state?.barangId) || null
   const kloterFokusAwal = barangFokusAwal
     ? getKloterList(barangFokusAwal).find(
         (k) => String(k.id) === String(location.state?.kloterId)
@@ -135,7 +179,7 @@ export default function StokBarangPage({
   const rows = useMemo(() => {
     const keyword = search.toLowerCase().trim()
 
-    return barang
+    return barangAktif
       .filter((item) => {
         if (!keyword) return true
         return (
@@ -158,14 +202,14 @@ export default function StokBarangPage({
           status: hitungStatus(view, stokMinimum),
         }
       })
-  }, [barang, search, pilihanKloter])
+  }, [barangAktif, search, pilihanKloter])
 
   /* =========================================
      MODAL
   ========================================== */
 
   const modalItem = modal
-    ? barang.find((item) => item.id === modal.itemId) || null
+    ? barangAktif.find((item) => item.id === modal.itemId) || null
     : null
   const modalKloterList = getKloterList(modalItem)
   const modalKloter =
@@ -212,7 +256,7 @@ export default function StokBarangPage({
      SIMPAN EDIT
   ========================================== */
 
-  function simpanEdit() {
+  async function simpanEdit() {
     if (!modalItem || !modalKloter) return
 
     const gudang = Number(stokGudang)
@@ -230,7 +274,7 @@ export default function StokBarangPage({
       return
     }
 
-    if (gudang + display > modalKloter.jumlahAwal) {
+    if (modalKloter.jumlahAwal && gudang + display > modalKloter.jumlahAwal) {
       setError(
         `Gudang + display (${gudang + display}) tidak boleh melebihi jumlah masuk awal Kloter ${modalKloter.nomor} (${modalKloter.jumlahAwal}).`
       )
@@ -240,12 +284,25 @@ export default function StokBarangPage({
     const gudangLama = modalKloter.stokGudang
     const displayLama = modalKloter.stokDisplay
 
-    setBarang((prev) =>
-      setStokKloter(prev, modalItem.id, modalKloter.id, {
-        stokGudang: gudang,
-        stokDisplay: display,
+    try {
+      await stokService.sesuaikanStokKloter(modalKloter.id, {
+        stok_gudang: gudang,
+        stok_display: display,
+        catatan: catatan.trim() || undefined,
       })
-    )
+      await muatDataStok()
+    } catch (apiErr) {
+      console.warn('Backend sesuaikan stok error, fallback lokal:', apiErr.message)
+    }
+
+    if (setBarang) {
+      setBarang((prev) =>
+        setStokKloter(prev, modalItem.id, modalKloter.id, {
+          stokGudang: gudang,
+          stokDisplay: display,
+        })
+      )
+    }
 
     if (setRiwayat && (gudang !== gudangLama || display !== displayLama)) {
       setRiwayat((prev) =>
@@ -272,7 +329,7 @@ export default function StokBarangPage({
      SIMPAN KURANGI (hanya stok display)
   ========================================== */
 
-  function simpanKurangi() {
+  async function simpanKurangi() {
     if (!modalItem || !modalKloter) return
 
     const jumlah = Number(jumlahKurang)
@@ -293,9 +350,21 @@ export default function StokBarangPage({
     const satuan = modalItem.satuan || 'pcs'
     const catatanTrim = catatan.trim()
 
-    setBarang((prev) =>
-      kurangiStokDisplayKloter(prev, modalItem.id, modalKloter.id, jumlah)
-    )
+    try {
+      await stokService.kurangiStokDisplay(modalKloter.id, {
+        jumlah,
+        catatan: catatanTrim || undefined,
+      })
+      await muatDataStok()
+    } catch (apiErr) {
+      console.warn('Backend kurangi stok error, fallback lokal:', apiErr.message)
+    }
+
+    if (setBarang) {
+      setBarang((prev) =>
+        kurangiStokDisplayKloter(prev, modalItem.id, modalKloter.id, jumlah)
+      )
+    }
 
     if (setRiwayat) {
       setRiwayat((prev) =>

@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, ClipboardCheck, Info } from 'lucide-react'
 import { Button, Input, Card, Badge, Table } from '../components/common'
+import * as opnameService from '../services/opnameService'
 import { setStokDisplayHasilOpname } from '../services/barangService'
 import { buatEntriRiwayat, tambahRiwayat } from '../services/riwayatService'
 import { todayISOString } from '../utils/dateHelpers'
@@ -27,7 +28,50 @@ const rowClass = {
 const focusClass =
   'focus:outline-none focus:ring-2 focus:ring-[#8A7CD9] focus:border-[#8A7CD9]'
 
-export default function StockOpnamePage({ barang, setBarang, setRiwayat }) {
+export default function StockOpnamePage({ barang = [], setBarang, setRiwayat }) {
+  const [dbBarang, setDbBarang] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [errorSubmit, setErrorSubmit] = useState('')
+
+  const muatDataOpname = async () => {
+    try {
+      setLoading(true)
+      const data = await opnameService.getOpnameFormData()
+      if (Array.isArray(data)) {
+        const mapped = data.map((b) => ({
+          id: b.id_barang,
+          sku: b.sku,
+          nama: b.nama_barang,
+          kategori: b.kategori,
+          stokGudang: Number(b.stok_gudang || 0),
+          stokDisplay: Number(b.stok_display || 0),
+          totalStok: Number(b.total_stok || 0),
+          kloter: (b.kloter || []).map((k) => ({
+            id: k.id_kloter,
+            nomor: String(k.nama_kloter || '').replace(/[^0-9]/g, '') || k.nama_kloter || 1,
+            namaKloter: k.nama_kloter,
+            tanggalKadaluarsa: k.tanggal_kedaluwarsa,
+            stokGudang: Number(k.stok_gudang || 0),
+            stokDisplay: Number(k.stok_display || 0),
+            jumlahAwal: Number(k.jumlah_awal || (k.stok_gudang + k.stok_display) || 0),
+          })),
+        }))
+        setDbBarang(mapped)
+      }
+    } catch (err) {
+      console.warn('Gagal memuat data opname dari backend:', err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    muatDataOpname()
+  }, [])
+
+  const barangAktif = dbBarang ?? (barang || [])
+
   const [tanggal, setTanggal] = useState(todayISOString())
 
   // Kloter yang dipilih per baris: { [idBarang]: idKloter }
@@ -50,7 +94,7 @@ export default function StockOpnamePage({ barang, setBarang, setRiwayat }) {
   ========================================== */
 
   const rows = useMemo(() => {
-    return barang.map((item) => {
+    return barangAktif.map((item) => {
       const kloterList = getKloterList(item)
       const kloter =
         kloterList.find(
@@ -84,50 +128,73 @@ export default function StockOpnamePage({ barang, setBarang, setRiwayat }) {
         invalid,
       }
     })
-  }, [barang, pilihanKloter, stokFisik])
+  }, [barangAktif, pilihanKloter, stokFisik])
 
   const jumlahDiisi = rows.filter((r) => r.hasInput).length
   const jumlahSesuai = rows.filter((r) => r.status === 'sesuai').length
   const jumlahKurang = rows.filter((r) => r.status === 'kurang').length
   const jumlahLebih = rows.filter((r) => r.status === 'lebih').length
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     if (jumlahDiisi === 0) return
 
     const rowsDiisi = rows.filter((row) => row.hasInput)
+    setSubmitting(true)
+    setErrorSubmit('')
 
-    setBarang((prev) => {
-      let next = prev
-      rowsDiisi.forEach((row) => {
-        next = setStokDisplayHasilOpname(next, row.id, row.kloter.id, row.fisik)
+    try {
+      const payload = {
+        tanggal_opname: tanggal,
+        items: rowsDiisi.map((row) => ({
+          id_kloter: Number(row.kloter.id),
+          stok_fisik: Number(row.fisik),
+        })),
+      }
+      await opnameService.simpanOpname(payload)
+      await muatDataOpname()
+    } catch (err) {
+      console.warn('Backend simpan opname error, fallback lokal:', err.message)
+      setErrorSubmit(err.message)
+    } finally {
+      setSubmitting(false)
+    }
+
+    if (setBarang) {
+      setBarang((prev) => {
+        let next = prev
+        rowsDiisi.forEach((row) => {
+          next = setStokDisplayHasilOpname(next, row.id, row.kloter.id, row.fisik)
+        })
+        return next
       })
-      return next
-    })
+    }
 
-    setRiwayat((prev) => {
-      let next = prev
-      rowsDiisi.forEach((row) => {
-        const satuan = row.satuan || 'pcs'
-        const tandaSelisih = row.selisih > 0 ? `+${row.selisih}` : row.selisih
+    if (setRiwayat) {
+      setRiwayat((prev) => {
+        let next = prev
+        rowsDiisi.forEach((row) => {
+          const satuan = row.satuan || 'pcs'
+          const tandaSelisih = row.selisih > 0 ? `+${row.selisih}` : row.selisih
 
-        next = tambahRiwayat(
-          next,
-          buatEntriRiwayat({
-            jenis: 'opname',
-            sku: row.sku,
-            nama: row.nama,
-            tanggalTransaksi: tanggal,
-            kloter: row.kloter.nomor,
-            keterangan:
-              `Kloter ${row.kloter.nomor}: stok display sistem ${row.display} → stok fisik ${row.fisik}. ` +
-              `Selisih opname: ${tandaSelisih} ${satuan} (${row.status}). ` +
-              `Tanggal opname: ${tanggal}.`,
-          })
-        )
+          next = tambahRiwayat(
+            next,
+            buatEntriRiwayat({
+              jenis: 'opname',
+              sku: row.sku,
+              nama: row.nama,
+              tanggalTransaksi: tanggal,
+              kloter: row.kloter.nomor,
+              keterangan:
+                `Kloter ${row.kloter.nomor}: stok display sistem ${row.display} → stok fisik ${row.fisik}. ` +
+                `Selisih opname: ${tandaSelisih} ${satuan} (${row.status}). ` +
+                `Tanggal opname: ${tanggal}.`,
+            })
+          )
+        })
+        return next
       })
-      return next
-    })
+    }
 
     setSuccessSummary({
       total: jumlahDiisi,

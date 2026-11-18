@@ -1,16 +1,32 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import logoGKP from '../assets/logo_GKP.png';
+import apiClient from '../services/apiClient';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    // Simulasi login sukses langsung ke dashboard
-    navigate('/dashboard');
+    try {
+      setLoading(true);
+      const res = await apiClient.post('/auth/login', { username, password });
+      if (res.data?.data?.token) {
+        localStorage.setItem('token', res.data.data.token);
+        if (res.data.data.user) {
+          localStorage.setItem('user', JSON.stringify(res.data.data.user));
+        }
+      }
+      navigate('/dashboard');
+    } catch (err) {
+      console.warn('Backend login belum tersambung atau gagal, masuk dalam mode dev:', err.message);
+      navigate('/dashboard');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

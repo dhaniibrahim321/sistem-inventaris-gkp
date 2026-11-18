@@ -8,7 +8,7 @@ async function start() {
     console.error('JWT_SECRET belum diset. Salin .env.example menjadi .env terlebih dahulu.')
     process.exit(1)
   }
-  await pool.query('SELECT 1') // pastikan koneksi MySQL berhasil
+  await pool.query('SELECT 1')
   app.listen(PORT, () => console.log(`SIGKP API berjalan di http://localhost:${PORT}/api`))
 }
 

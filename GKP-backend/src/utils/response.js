@@ -1,6 +1,3 @@
-// Format respons API yang seragam untuk seluruh endpoint:
-// { "status": "success" | "error", "message": "...", "data": { ... } | null }
-
 function sendSuccess(res, { statusCode = 200, message = 'Berhasil.', data = null } = {}) {
   return res.status(statusCode).json({ status: 'success', message, data })
 }

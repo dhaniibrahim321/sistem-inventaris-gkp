@@ -43,7 +43,6 @@ const FROM_JOIN = `
   JOIN barang b      ON b.id_barang = k.id_barang
   JOIN users u       ON u.id_user   = p.id_user`
 
-// Riwayat pergerakan gudang -> display dengan pagination server-side.
 async function findAll(filters, { limit, offset }, db = pool) {
   const { clause, params } = buildFilter(filters)
 

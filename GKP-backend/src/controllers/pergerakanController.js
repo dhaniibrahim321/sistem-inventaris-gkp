@@ -19,10 +19,6 @@ const {
   buildPagination,
 } = require('../utils/helpers')
 
-// ---------------------------------------------------------------------
-// GET /api/kloter/:id_barang?hanya_tersedia=1
-// Daftar kloter aktif milik satu barang (urut FIFO) untuk dropdown UI.
-// ---------------------------------------------------------------------
 exports.getKloterByBarang = asyncHandler(async (req, res) => {
   const idBarang = requirePositiveInt(req.params.id_barang, 'id_barang')
   const hanyaTersedia = optionalBoolean(req.query.hanya_tersedia)
@@ -40,15 +36,9 @@ exports.getKloterByBarang = asyncHandler(async (req, res) => {
   })
 })
 
-// ---------------------------------------------------------------------
-// POST /api/pergerakan
-// Body: { id_kloter, jumlah_pindah, tanggal_pindah, letak_rak, catatan? }
-// Memindahkan stok gudang -> display dalam SATU transaksi atomik.
-// ---------------------------------------------------------------------
 exports.createPergerakan = asyncHandler(async (req, res) => {
   const body = req.body ?? {}
 
-  // 1. Validasi input
   const idKloter = requirePositiveInt(body.id_kloter, 'id_kloter')
   const jumlahPindah = requirePositiveInt(body.jumlah_pindah, 'Jumlah pindah', {
     max: maxJumlahTransaksi(),
@@ -61,7 +51,6 @@ exports.createPergerakan = asyncHandler(async (req, res) => {
     throw new AppError('Tanggal pindah tidak boleh melebihi tanggal hari ini.', 400)
   }
 
-  // 2. Transaksi atomik
   const conn = await pool.getConnection()
   let reusable = true
   let result
@@ -69,8 +58,6 @@ exports.createPergerakan = asyncHandler(async (req, res) => {
   try {
     await conn.beginTransaction()
 
-    // Kunci baris kloter: transaksi lain yang ingin memindahkan stok kloter
-    // yang sama harus menunggu sampai transaksi ini COMMIT / ROLLBACK.
     const kloter = await kloterModel.lockActiveWithBarang(conn, idKloter)
     if (!kloter) {
       throw new AppError('Kloter tidak ditemukan atau sudah dihapus.', 404)
@@ -131,7 +118,7 @@ exports.createPergerakan = asyncHandler(async (req, res) => {
     try {
       await conn.rollback()
     } catch {
-      reusable = false // koneksi rusak: jangan dikembalikan ke pool
+      reusable = false
     }
     throw err
   } finally {
@@ -146,10 +133,6 @@ exports.createPergerakan = asyncHandler(async (req, res) => {
   })
 })
 
-// ---------------------------------------------------------------------
-// GET /api/pergerakan?page=1&limit=10&id_barang=&id_kloter=&dari=&sampai=&search=
-// Riwayat pergerakan gudang -> display dengan pagination server-side.
-// ---------------------------------------------------------------------
 exports.listPergerakan = asyncHandler(async (req, res) => {
   const q = req.query
   const { page, limit, offset } = parsePagination(q)

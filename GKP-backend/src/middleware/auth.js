@@ -5,7 +5,7 @@ const userModel = require('../models/userModel')
 // Verifikasi token Bearer JWT + memastikan akun pemilik token masih aktif
 // (akun yang di-soft-delete langsung kehilangan akses walau tokennya belum expired).
 // Data user terbaru dari database disimpan di req.user.
-module.exports = async function authenticate(req, res, next) {
+async function authenticate(req, res, next) {
   try {
     const header = req.headers.authorization || ''
     const [scheme, token] = header.split(' ')
@@ -39,4 +39,5 @@ module.exports = async function authenticate(req, res, next) {
 // Kompatibilitas ganda:
 // Bisa di-import via `const authenticate = require('./auth')`
 // ATAU via `const { authenticate } = require('./auth')` (dipakai oleh modul Nawaf/tim)
-module.exports.authenticate = module.exports
+module.exports = authenticate
+module.exports.authenticate = authenticate

@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import * as dashboardService from '../services/dashboardService'
 import {
   CalendarDays,
   Package,
@@ -374,6 +375,127 @@ export default function DashboardPage({ barang = [], riwayat = [] }) {
   const [selectedSku, setSelectedSku] = useState('')
   const [grafikBesar, setGrafikBesar] = useState(false)
 
+  const [apiData, setApiData] = useState({
+    ringkasan: null,
+    statistik: null,
+    stokKritisGudang: null,
+    stokKritisDisplay: null,
+    kedaluwarsa: null,
+    aktivitas: null,
+  })
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    let cancel = false
+
+    async function loadData() {
+      try {
+        setLoading(true)
+        const [ringkasan, statistik, kritis, exp, aktivitas] = await Promise.allSettled([
+          dashboardService.getRingkasan({
+            batas_gudang: settings.stokKritisGudang,
+            batas_display: settings.stokKritisDisplay,
+            hari_kedaluwarsa: (settings.kadaluarsaBulan ?? 3) * 30,
+          }),
+          dashboardService.getStatistik({
+            start: startDate,
+            end: endDate,
+            sku: selectedSku,
+          }),
+          dashboardService.getStokKritis({
+            batas_gudang: settings.stokKritisGudang,
+            batas_display: settings.stokKritisDisplay,
+          }),
+          dashboardService.getKedaluwarsa({
+            hari_kedaluwarsa: (settings.kadaluarsaBulan ?? 3) * 30,
+          }),
+          dashboardService.getAktivitas(50),
+        ])
+
+        if (!cancel) {
+          setApiData({
+            ringkasan: ringkasan.status === 'fulfilled' ? ringkasan.value : null,
+            statistik: statistik.status === 'fulfilled' ? statistik.value : null,
+            stokKritisGudang:
+              kritis.status === 'fulfilled' && Array.isArray(kritis.value?.gudang)
+                ? kritis.value.gudang.map((b) => ({
+                    id: b.id_barang,
+                    sku: b.sku,
+                    nama: b.nama_barang,
+                    kategori: b.kategori,
+                    gambar: b.foto_url,
+                    stokGudang: Number(b.stok_gudang),
+                    stokDisplay: Number(b.stok_display),
+                  }))
+                : null,
+            stokKritisDisplay:
+              kritis.status === 'fulfilled' && Array.isArray(kritis.value?.display)
+                ? kritis.value.display.map((b) => ({
+                    id: b.id_barang,
+                    sku: b.sku,
+                    nama: b.nama_barang,
+                    kategori: b.kategori,
+                    gambar: b.foto_url,
+                    stokGudang: Number(b.stok_gudang),
+                    stokDisplay: Number(b.stok_display),
+                  }))
+                : null,
+            kedaluwarsa:
+              exp.status === 'fulfilled' && Array.isArray(exp.value)
+                ? exp.value.map((k) => ({
+                    item: {
+                      id: k.id_barang,
+                      sku: k.sku,
+                      nama: k.nama_barang,
+                      kategori: k.kategori,
+                      gambar: k.foto_url,
+                    },
+                    kloter: {
+                      id: k.id_kloter,
+                      nomor: String(k.nama_kloter || '').replace(/[^0-9]/g, '') || k.nama_kloter || 1,
+                      namaKloter: k.nama_kloter,
+                      tanggalKadaluarsa: k.tanggal_kedaluwarsa,
+                      stokGudang: Number(k.stok_gudang),
+                      stokDisplay: Number(k.stok_display),
+                    },
+                    sisa: k.sisa_hari,
+                  }))
+                : null,
+            aktivitas:
+              aktivitas.status === 'fulfilled' && Array.isArray(aktivitas.value)
+                ? aktivitas.value.map((a) => {
+                    const d = a.created_at ? new Date(a.created_at) : new Date()
+                    return {
+                      id: a.id,
+                      jenis: a.jenis,
+                      sku: a.sku || '-',
+                      nama: a.nama_barang || a.nama || 'Barang',
+                      keterangan: a.keterangan || '',
+                      oleh: a.oleh || 'Admin',
+                      tanggal: a.tanggal_transaksi || a.created_at?.slice(0, 10),
+                      waktu: d.toLocaleTimeString('id-ID', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false,
+                      }),
+                    }
+                  })
+                : null,
+          })
+        }
+      } catch (err) {
+        console.warn('Dashboard API load error:', err.message)
+      } finally {
+        if (!cancel) setLoading(false)
+      }
+    }
+
+    loadData()
+    return () => {
+      cancel = true
+    }
+  }, [startDate, endDate, selectedSku, settings])
+
   function handleStartChange(value) {
     if (!value) return
     setStartDate(value)
@@ -405,6 +527,23 @@ export default function DashboardPage({ barang = [], riwayat = [] }) {
   const satuanStatistik = modeSku ? 'SKU' : 'pcs'
 
   const { statistik, totalGudang, totalDisplay } = useMemo(() => {
+    if (apiData.statistik?.per_hari) {
+      const pData = apiData.statistik.per_hari.map((b) => ({
+        tanggal: b.tanggal,
+        gudang: modeSku ? Number(b.masuk_gudang_sku ?? 0) : Number(b.masuk_gudang_pcs ?? 0),
+        display: modeSku ? Number(b.pindah_display_sku ?? 0) : Number(b.pindah_display_pcs ?? 0),
+      }))
+      return {
+        statistik: pData,
+        totalGudang: modeSku
+          ? Number(apiData.statistik.total_masuk_gudang_sku ?? 0)
+          : Number(apiData.statistik.total_masuk_gudang_pcs ?? 0),
+        totalDisplay: modeSku
+          ? Number(apiData.statistik.total_pindah_display_sku ?? 0)
+          : Number(apiData.statistik.total_pindah_display_pcs ?? 0),
+      }
+    }
+
     const perTanggal = new Map(
       buatDaftarTanggal(startDate, endDate).map((tanggal) => [
         tanggal,
@@ -455,9 +594,10 @@ export default function DashboardPage({ barang = [], riwayat = [] }) {
       totalGudang: modeSku ? skuGudangRentang.size : pcsGudang,
       totalDisplay: modeSku ? skuDisplayRentang.size : pcsDisplay,
     }
-  }, [riwayat, startDate, endDate, selectedSku, modeSku])
+  }, [riwayat, startDate, endDate, selectedSku, modeSku, apiData.statistik])
 
   const stokKritisGudang = useMemo(() => {
+    if (apiData.stokKritisGudang) return apiData.stokKritisGudang
     const batas = Number(settings.stokKritisGudang ?? 5)
     return barang
       .filter(
@@ -467,9 +607,10 @@ export default function DashboardPage({ barang = [], riwayat = [] }) {
         (a, b) =>
           Number(a.stokGudang ?? 0) - Number(b.stokGudang ?? 0)
       )
-  }, [barang, settings.stokKritisGudang])
+  }, [barang, settings.stokKritisGudang, apiData.stokKritisGudang])
 
   const stokKritisDisplay = useMemo(() => {
+    if (apiData.stokKritisDisplay) return apiData.stokKritisDisplay
     const batas = Number(settings.stokKritisDisplay ?? 3)
     return barang
       .filter(
@@ -479,9 +620,10 @@ export default function DashboardPage({ barang = [], riwayat = [] }) {
         (a, b) =>
           Number(a.stokDisplay ?? 0) - Number(b.stokDisplay ?? 0)
       )
-  }, [barang, settings.stokKritisDisplay])
+  }, [barang, settings.stokKritisDisplay, apiData.stokKritisDisplay])
 
   const kedaluwarsa = useMemo(() => {
+    if (apiData.kedaluwarsa) return apiData.kedaluwarsa
     const batasHari = Number(settings.kadaluarsaBulan ?? 3) * 30
     const hasil = []
 
@@ -498,12 +640,12 @@ export default function DashboardPage({ barang = [], riwayat = [] }) {
     })
 
     return hasil.sort((a, b) => a.sisa - b.sisa)
-  }, [barang, settings.kadaluarsaBulan])
+  }, [barang, settings.kadaluarsaBulan, apiData.kedaluwarsa])
 
-  const activityFeed = useMemo(
-    () => sortRiwayatTerbaru(riwayat).slice(0, MAKS_AKTIVITAS),
-    [riwayat]
-  )
+  const activityFeed = useMemo(() => {
+    if (apiData.aktivitas) return apiData.aktivitas
+    return sortRiwayatTerbaru(riwayat).slice(0, MAKS_AKTIVITAS)
+  }, [riwayat, apiData.aktivitas])
 
   const keCatatBarang = (item) =>
     navigate('/barang-masuk', { state: { barangId: item.id } })
@@ -527,24 +669,25 @@ export default function DashboardPage({ barang = [], riwayat = [] }) {
 
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
-        <p className="mt-0.5 text-sm text-slate-500">
-          Ringkasan kondisi inventaris gudang hari ini.
-        </p>
-      </header>
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
+          <p className="mt-0.5 text-sm text-slate-500">
+            Ringkasan kondisi inventaris gudang hari ini.
+          </p>
+        </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[190px_minmax(0,1fr)]">
+        {/* Kotak Total Jenis Barang dipindah ke samping kanan header */}
         <section
           aria-label="Total jenis barang"
-          className="self-start rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+          className="rounded-xl border border-slate-200 bg-white px-5 py-3 shadow-sm min-w-[210px]"
         >
           <h2 className="text-xs font-semibold text-slate-700">
             Total Jenis Barang
           </h2>
-          <div className="mt-3 flex items-end justify-between">
-            <p className="text-3xl font-bold text-slate-800">
-              {barang.length}
+          <div className="mt-1 flex items-end justify-between gap-4">
+            <p className="text-2xl font-bold text-slate-800">
+              {apiData.ringkasan?.total_barang ?? barang.length}
               <span className="ml-1.5 text-xs font-semibold text-slate-400">
                 SKU
               </span>
@@ -554,11 +697,12 @@ export default function DashboardPage({ barang = [], riwayat = [] }) {
             </div>
           </div>
         </section>
+      </header>
 
-        <section
-          aria-label="Statistik perputaran barang"
-          className="min-w-0 rounded-xl border border-violet-100 bg-violet-100/70 p-3 shadow-sm"
-        >
+      <section
+        aria-label="Statistik perputaran barang"
+        className="w-full min-w-0 rounded-xl border border-violet-100 bg-violet-100/70 p-3 shadow-sm"
+      >
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
             <h2 className="text-base font-bold text-slate-800">
               {buatJudulRentang(startDate, endDate)}
@@ -752,7 +896,6 @@ export default function DashboardPage({ barang = [], riwayat = [] }) {
             </div>
           </div>
         </section>
-      </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <PanelDaftar

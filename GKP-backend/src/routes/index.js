@@ -20,5 +20,10 @@ for (const r of routes) {
   }
 }
 
+//nawaf
+router.use('/dashboard', require('./dashboardRoutes'))
+router.use('/stok', require('./stokRoutes'))
+router.use('/opname', require('./opnameRoutes'))
+
 module.exports = router
 

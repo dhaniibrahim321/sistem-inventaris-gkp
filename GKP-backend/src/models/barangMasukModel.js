@@ -10,7 +10,6 @@ async function create(conn, { idKloter, jumlah, tanggalMasuk, lokasiRak, catatan
   return result.insertId
 }
 
-// Membangun klausa WHERE dari filter (semua nilai lewat placeholder ?).
 function buildFilter({ idBarang, idKloter, dari, sampai, search }) {
   const where = []
   const params = []
@@ -44,8 +43,6 @@ const FROM_JOIN = `
   JOIN barang b      ON b.id_barang = k.id_barang
   JOIN users u       ON u.id_user   = m.id_user`
 
-// Riwayat barang masuk dengan pagination server-side.
-// Log tetap ditampilkan walau barang/kloternya sudah di-soft-delete (jejak audit).
 async function findAll(filters, { limit, offset }, db = pool) {
   const { clause, params } = buildFilter(filters)
 

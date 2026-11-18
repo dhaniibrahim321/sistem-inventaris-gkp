@@ -11,6 +11,7 @@ import {
   FileText,
   CheckCircle2,
   Layers,
+  Loader2,
 } from 'lucide-react'
 
 import {
@@ -23,6 +24,8 @@ import {
   nomorKloterBerikutnya,
 } from '../utils/kloterHelpers'
 import { todayISOString } from '../utils/dateHelpers'
+import { simpanBarangMasuk } from '../services/barangMasukService'
+import { getDaftarStok } from '../services/stokService'
 
 const inputClass =
   'w-full rounded-lg border bg-white py-2.5 text-sm outline-none transition ' +
@@ -39,29 +42,70 @@ export default function BarangMasukPage({
   setBarang,
   setRiwayat,
 }) {
-  /* =========================================
-     PILIH BARANG
-     Dashboard (Stok Kritis Gudang) membawa { barangId } lewat navigasi,
-     sehingga barang yang diklik langsung terpilih di halaman ini.
-  ========================================== */
+  const [dbBarang, setDbBarang] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+
+  async function muatDataBarang() {
+    setLoading(true)
+    try {
+      const res = await getDaftarStok({ limit: 1000 })
+      if (res?.data && Array.isArray(res.data)) {
+        const mapped = res.data.map((b) => ({
+          id: b.id_barang,
+          sku: b.sku,
+          nama: b.nama_barang,
+          kategori: b.kategori,
+          satuan: b.satuan || 'pcs',
+          gambar: b.foto_url || null,
+          stokGudang: Number(b.stok_gudang || 0),
+          stokDisplay: Number(b.stok_display || 0),
+          totalStok: Number(b.total || 0),
+          kloter: (b.kloter || []).map((k) => ({
+            id: k.id_kloter,
+            nomor: String(k.nama_kloter || '').replace(/[^0-9]/g, '') || k.nama_kloter || 1,
+            namaKloter: k.nama_kloter,
+            tanggalKadaluarsa: k.tanggal_kedaluwarsa,
+            stokGudang: Number(k.stok_gudang || 0),
+            stokDisplay: Number(k.stok_display || 0),
+            jumlahAwal: Number(k.jumlah_awal || (k.stok_gudang + k.stok_display) || 0),
+            sisaHari: k.sisa_hari,
+          })),
+        }))
+        setDbBarang(mapped)
+      }
+    } catch (err) {
+      console.warn('Gagal memuat barang dari backend:', err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    muatDataBarang()
+  }, [])
+
+  const barangAktif = dbBarang ?? barang
 
   const location = useLocation()
   const barangIdAwal = location.state?.barangId ?? null
   const barangAwal =
-    barang.find((item) => item.id === barangIdAwal) || null
+    barangAktif.find((item) => item.id === barangIdAwal) || null
 
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState(
     barangAwal ? barangAwal.id : null
   )
 
-  // Selalu diambil dari data terbaru, bukan salinan lama.
-  const selectedItem =
-    barang.find((item) => item.id === selectedId) || null
+  useEffect(() => {
+    if (barangIdAwal && !selectedId && barangAktif.length > 0) {
+      const match = barangAktif.find((item) => item.id === barangIdAwal)
+      if (match) setSelectedId(match.id)
+    }
+  }, [barangIdAwal, barangAktif, selectedId])
 
-  /* =========================================
-     FORM TRANSAKSI BARANG MASUK
-  ========================================== */
+  const selectedItem =
+    barangAktif.find((item) => item.id === selectedId) || null
 
   const [jumlah, setJumlah] = useState('')
   const [lokasiRak, setLokasiRak] = useState('')
@@ -76,7 +120,6 @@ export default function BarangMasukPage({
     ? nomorKloterBerikutnya(selectedItem)
     : 1
 
-  // Angka stok seluruh kloter barang yang dipilih.
   const stokView = selectedItem
     ? getStokView(selectedItem, 'all')
     : { gudang: 0, display: 0, total: 0 }
@@ -86,16 +129,15 @@ export default function BarangMasukPage({
   const filteredItems = useMemo(() => {
     const keyword = search.trim().toLowerCase()
 
-    if (!keyword) return barang
+    if (!keyword) return barangAktif
 
-    return barang.filter(
+    return barangAktif.filter(
       (item) =>
         String(item.nama ?? '').toLowerCase().includes(keyword) ||
         String(item.sku ?? '').toLowerCase().includes(keyword)
     )
-  }, [barang, search])
+  }, [barangAktif, search])
 
-  // Gulir daftar ke barang yang terpilih (mis. saat datang dari Dashboard).
   useEffect(() => {
     if (selectedId === null) return
     document
@@ -117,10 +159,6 @@ export default function BarangMasukPage({
     setSuccessMessage('')
     resetForm()
   }
-
-  /* =========================================
-     VALIDASI
-  ========================================== */
 
   function validate() {
     const errs = {}
@@ -157,11 +195,7 @@ export default function BarangMasukPage({
     return errs
   }
 
-  /* =========================================
-     SUBMIT
-  ========================================== */
-
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
 
     const errs = validate()
@@ -173,59 +207,81 @@ export default function BarangMasukPage({
     }
 
     const jumlahMasuk = Number(jumlah)
+    setSubmitting(true)
+    setErrors({})
+    setSuccessMessage('')
 
-    // Kloter baru: seluruh barang masuk berada di gudang (stokDisplay 0).
-    // jumlahAwal = TOTAL kloter dan tidak berubah oleh pergerakan/pengurangan.
-    const kloterBaru = {
-      id: Date.now(),
-      nomor: kloterBerikutnya,
-      jumlah: jumlahMasuk,
-      jumlahAwal: jumlahMasuk,
-      stokGudang: jumlahMasuk,
-      stokDisplay: 0,
-      tanggalMasuk,
-      tanggalKadaluarsa,
-      lokasiRak,
-      catatan,
-    }
+    try {
+      const payload = {
+        id_barang: selectedItem.id,
+        jumlah: jumlahMasuk,
+        tanggal_masuk: tanggalMasuk,
+        tanggal_kedaluwarsa: tanggalKadaluarsa,
+        lokasi_rak: lokasiRak.trim(),
+        catatan: catatan.trim() || undefined,
+      }
+      const res = await simpanBarangMasuk(payload)
 
-    setBarang((prev) => tambahKloterBarang(prev, selectedItem.id, kloterBaru))
+      const kloterNomor = res?.data?.nama_kloter
+        ? String(res.data.nama_kloter).replace(/[^0-9]/g, '') || kloterBerikutnya
+        : kloterBerikutnya
 
-    const catatanTrim = catatan.trim()
-
-    // Keterangan diawali jumlah (+N) karena Dashboard membaca angka pada
-    // riwayat untuk grafik barang masuk gudang.
-    setRiwayat((prev) =>
-      tambahRiwayat(
-        prev,
-        buatEntriRiwayat({
-          jenis: 'masuk',
-          sku: selectedItem.sku,
-          nama: selectedItem.nama,
-          tanggalTransaksi: tanggalMasuk,
+      if (typeof setBarang === 'function') {
+        const kloterBaru = {
+          id: res?.data?.id_kloter || Date.now(),
+          nomor: kloterNomor,
           jumlah: jumlahMasuk,
-          kloter: kloterBerikutnya,
-          keterangan:
-            `Barang masuk +${jumlahMasuk} ${satuan} (Kloter ${kloterBerikutnya}). ` +
-            `Lokasi rak: ${lokasiRak.trim()}. ` +
-            `Tanggal masuk: ${tanggalMasuk}. ` +
-            `Tanggal kedaluwarsa: ${tanggalKadaluarsa}. ` +
-            `Stok gudang ${stokView.gudang} → ${stokView.gudang + jumlahMasuk}.` +
-            (catatanTrim ? ` Catatan: ${catatanTrim}` : ''),
-        })
+          jumlahAwal: jumlahMasuk,
+          stokGudang: jumlahMasuk,
+          stokDisplay: 0,
+          tanggalMasuk,
+          tanggalKadaluarsa,
+          lokasiRak,
+          catatan,
+        }
+        setBarang((prev) => tambahKloterBarang(prev, selectedItem.id, kloterBaru))
+      }
+
+      const catatanTrim = catatan.trim()
+      if (typeof setRiwayat === 'function') {
+        setRiwayat((prev) =>
+          tambahRiwayat(
+            prev,
+            buatEntriRiwayat({
+              jenis: 'masuk',
+              sku: selectedItem.sku,
+              nama: selectedItem.nama,
+              tanggalTransaksi: tanggalMasuk,
+              jumlah: jumlahMasuk,
+              kloter: kloterNomor,
+              keterangan:
+                `Barang masuk +${jumlahMasuk} ${satuan} (Kloter ${kloterNomor}). ` +
+                `Lokasi rak: ${lokasiRak.trim()}. ` +
+                `Tanggal masuk: ${tanggalMasuk}. ` +
+                `Tanggal kedaluwarsa: ${tanggalKadaluarsa}. ` +
+                `Stok gudang ${stokView.gudang} → ${stokView.gudang + jumlahMasuk}.` +
+                (catatanTrim ? ` Catatan: ${catatanTrim}` : ''),
+            })
+          )
+        )
+      }
+
+      setSuccessMessage(
+        `${jumlahMasuk} ${satuan} "${selectedItem.nama}" (Kloter ${kloterNomor}) berhasil ditambahkan ke stok gudang.`
       )
-    )
 
-    setSuccessMessage(
-      `${jumlahMasuk} ${satuan} "${selectedItem.nama}" (Kloter ${kloterBerikutnya}) berhasil ditambahkan ke stok gudang.`
-    )
-
-    resetForm()
+      resetForm()
+      await muatDataBarang()
+    } catch (err) {
+      const msg =
+        err.response?.data?.message ||
+        err.message ||
+        'Gagal menyimpan pencatatan barang masuk.'
+      setErrors({ submit: msg })
+    } finally {
+      setSubmitting(false)
+    }
   }
-
-  /* =========================================
-     RENDER
-  ========================================== */
 
   return (
     <div className="space-y-6">
@@ -240,11 +296,7 @@ export default function BarangMasukPage({
         </p>
       </div>
 
-
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        {/* ===================================
-            PILIH BARANG
-        ==================================== */}
         <section
           aria-label="Pilih barang"
           className="rounded-xl border border-gray-200 bg-white shadow-sm"
@@ -281,7 +333,12 @@ export default function BarangMasukPage({
             </div>
 
             <div className="mt-4 max-h-[500px] space-y-3 overflow-y-auto">
-              {barang.length === 0 ? (
+              {loading ? (
+                <div className="flex flex-col items-center justify-center p-8 text-center text-gray-500">
+                  <Loader2 size={32} className="animate-spin text-[#8A7CD9]" />
+                  <p className="mt-3 text-sm">Memuat data barang...</p>
+                </div>
+              ) : barangAktif.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center">
                   <Package size={40} className="mx-auto text-gray-300" />
 
@@ -356,9 +413,6 @@ export default function BarangMasukPage({
           </div>
         </section>
 
-        {/* ===================================
-            TRANSAKSI BARANG MASUK
-        ==================================== */}
         <section
           aria-label="Transaksi barang masuk"
           className="space-y-6"
@@ -395,72 +449,63 @@ export default function BarangMasukPage({
                 </div>
               ) : (
                 <>
-                  <div className="flex items-center gap-4 rounded-lg bg-gray-50 p-4">
-                    <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-lg bg-white">
-                      {selectedItem.gambar ? (
-                        <img
-                          src={selectedItem.gambar}
-                          alt={selectedItem.nama}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <Package size={28} className="text-gray-400" />
-                      )}
-                    </div>
+                  <div className="space-y-4 rounded-lg bg-gray-50 p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-gray-800">
+                          {selectedItem.nama}
+                        </p>
 
-                    <div>
-                      <h3 className="font-semibold text-gray-800">
-                        {selectedItem.nama || '-'}
-                      </h3>
-
-                      <p className="mt-1 text-sm text-gray-500">
-                        SKU: {selectedItem.sku || '-'}
-                      </p>
-
-                      <p className="mt-1 text-sm text-gray-500">
-                        {selectedItem.kategori || 'Tanpa kategori'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 grid grid-cols-3 gap-3">
-                    <div className="rounded-lg border border-gray-200 p-4">
-                      <div className="flex items-center gap-2 text-sm text-gray-500">
-                        <Warehouse size={17} />
-                        Gudang
+                        <p className="mt-0.5 text-xs text-gray-500">
+                          SKU: {selectedItem.sku || '-'} •{' '}
+                          {selectedItem.kategori || 'Tanpa kategori'}
+                        </p>
                       </div>
 
-                      <p className="mt-2 text-2xl font-bold text-gray-800">
-                        {stokView.gudang}
-                      </p>
-
-                      <p className="text-xs text-gray-400">Stok tersedia</p>
+                      <span className="shrink-0 rounded-md bg-[#EDEAFF] px-2.5 py-1 text-xs font-semibold text-[#5B528D]">
+                        Satuan: {satuan}
+                      </span>
                     </div>
 
-                    <div className="rounded-lg border border-gray-200 p-4">
-                      <div className="flex items-center gap-2 text-sm text-gray-500">
-                        <Store size={17} />
-                        Display
+                    <div className="grid grid-cols-3 gap-3 border-t border-gray-200 pt-3">
+                      <div className="rounded-lg bg-white p-3 text-center shadow-sm">
+                        <div className="flex items-center justify-center gap-1.5 text-gray-500">
+                          <Warehouse size={16} />
+                          <span className="text-xs">Gudang</span>
+                        </div>
+
+                        <p className="mt-1 text-lg font-bold text-gray-800">
+                          {stokView.gudang}
+                        </p>
+
+                        <p className="text-[11px] text-gray-400">{satuan}</p>
                       </div>
 
-                      <p className="mt-2 text-2xl font-bold text-gray-800">
-                        {stokView.display}
-                      </p>
+                      <div className="rounded-lg bg-white p-3 text-center shadow-sm">
+                        <div className="flex items-center justify-center gap-1.5 text-gray-500">
+                          <Store size={16} />
+                          <span className="text-xs">Display</span>
+                        </div>
 
-                      <p className="text-xs text-gray-400">Stok tersedia</p>
-                    </div>
+                        <p className="mt-1 text-lg font-bold text-gray-800">
+                          {stokView.display}
+                        </p>
 
-                    <div className="rounded-lg border border-gray-200 p-4">
-                      <div className="flex items-center gap-2 text-sm text-gray-500">
-                        <Package size={17} />
-                        Total
+                        <p className="text-[11px] text-gray-400">{satuan}</p>
                       </div>
 
-                      <p className="mt-2 text-2xl font-bold text-gray-800">
-                        {stokView.total}
-                      </p>
+                      <div className="rounded-lg bg-white p-3 text-center shadow-sm">
+                        <div className="flex items-center justify-center gap-1.5 text-gray-500">
+                          <Package size={16} />
+                          <span className="text-xs">Total</span>
+                        </div>
 
-                      <p className="text-xs text-gray-400">Seluruh stok</p>
+                        <p className="mt-1 text-lg font-bold text-[#5B528D]">
+                          {stokView.total}
+                        </p>
+
+                        <p className="text-[11px] text-gray-400">{satuan}</p>
+                      </div>
                     </div>
                   </div>
 
@@ -477,7 +522,6 @@ export default function BarangMasukPage({
                   </div>
 
                   <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* KLOTER (otomatis) */}
                     <div className="flex items-start gap-3 rounded-lg border border-[#C2B6FE] bg-[#EDEAFF]/60 px-4 py-3">
                       <Layers
                         size={18}
@@ -494,7 +538,6 @@ export default function BarangMasukPage({
                       </div>
                     </div>
 
-                    {/* JUMLAH */}
                     <div>
                       <label
                         htmlFor="jumlah-masuk"
@@ -517,7 +560,6 @@ export default function BarangMasukPage({
                       <FieldError>{errors.jumlah}</FieldError>
                     </div>
 
-                    {/* LOKASI RAK */}
                     <div>
                       <label
                         htmlFor="lokasi-rak"
@@ -548,7 +590,6 @@ export default function BarangMasukPage({
                       <FieldError>{errors.lokasiRak}</FieldError>
                     </div>
 
-                    {/* TANGGAL KEDALUWARSA */}
                     <div>
                       <label
                         htmlFor="tanggal-kedaluwarsa"
@@ -580,7 +621,6 @@ export default function BarangMasukPage({
                       <FieldError>{errors.tanggalKadaluarsa}</FieldError>
                     </div>
 
-                    {/* TANGGAL MASUK */}
                     <div>
                       <label
                         htmlFor="tanggal-masuk"
@@ -610,7 +650,6 @@ export default function BarangMasukPage({
                       <FieldError>{errors.tanggalMasuk}</FieldError>
                     </div>
 
-                    {/* CATATAN */}
                     <div>
                       <label
                         htmlFor="catatan-masuk"
@@ -636,6 +675,12 @@ export default function BarangMasukPage({
                       </div>
                     </div>
 
+                    {errors.submit && (
+                      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+                        {errors.submit}
+                      </div>
+                    )}
+
                     {successMessage && (
                       <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
                         <CheckCircle2 size={20} className="shrink-0" />
@@ -645,9 +690,17 @@ export default function BarangMasukPage({
                     
                     <button
                       type="submit"
-                      className="w-full rounded-lg bg-[#5B528D] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#4a4275] focus:outline-none focus:ring-2 focus:ring-[#C2B6FE]"
+                      disabled={submitting}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#5B528D] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#4a4275] focus:outline-none focus:ring-2 focus:ring-[#C2B6FE] disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      Simpan Pencatatan Barang
+                      {submitting ? (
+                        <>
+                          <Loader2 size={18} className="animate-spin" />
+                          <span>Menyimpan...</span>
+                        </>
+                      ) : (
+                        'Simpan Pencatatan Barang'
+                      )}
                     </button>
                   </form>
                 </>

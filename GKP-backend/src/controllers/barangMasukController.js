@@ -17,17 +17,9 @@ const {
   buildPagination,
 } = require('../utils/helpers')
 
-// ---------------------------------------------------------------------
-// POST /api/barang-masuk
-// Body: { id_barang, jumlah, tanggal_masuk, tanggal_kedaluwarsa,
-//         nama_kloter?, lokasi_rak?, catatan? }
-// Membuat kloter baru (stok_gudang = jumlah, stok_display = 0) + log masuk
-// dalam SATU transaksi atomik.
-// ---------------------------------------------------------------------
 exports.createBarangMasuk = asyncHandler(async (req, res) => {
   const body = req.body ?? {}
 
-  // 1. Validasi input
   const idBarang = requirePositiveInt(body.id_barang, 'id_barang')
   const jumlah = requirePositiveInt(body.jumlah, 'Jumlah barang masuk', {
     max: maxJumlahTransaksi(),
@@ -49,7 +41,6 @@ exports.createBarangMasuk = asyncHandler(async (req, res) => {
     throw new AppError('Barang yang sudah kedaluwarsa tidak dapat dicatat sebagai barang masuk.', 400)
   }
 
-  // 2. Transaksi atomik
   const conn = await pool.getConnection()
   let reusable = true
   let result
@@ -57,7 +48,6 @@ exports.createBarangMasuk = asyncHandler(async (req, res) => {
   try {
     await conn.beginTransaction()
 
-    // Kunci baris barang -> penomoran kloter aman dari race condition.
     const barang = await barangModel.lockActiveById(conn, idBarang)
     if (!barang) {
       throw new AppError('Barang tidak ditemukan atau sudah dihapus.', 404)
@@ -104,7 +94,7 @@ exports.createBarangMasuk = asyncHandler(async (req, res) => {
     try {
       await conn.rollback()
     } catch {
-      reusable = false // koneksi rusak: jangan dikembalikan ke pool
+      reusable = false
     }
     if (err.code === 'ER_DUP_ENTRY') {
       throw new AppError(`Nama kloter "${namaKloter}" sudah dipakai untuk barang ini.`, 409)
@@ -122,10 +112,6 @@ exports.createBarangMasuk = asyncHandler(async (req, res) => {
   })
 })
 
-// ---------------------------------------------------------------------
-// GET /api/barang-masuk?page=1&limit=10&id_barang=&id_kloter=&dari=&sampai=&search=
-// Riwayat barang masuk dengan pagination server-side.
-// ---------------------------------------------------------------------
 exports.listBarangMasuk = asyncHandler(async (req, res) => {
   const q = req.query
   const { page, limit, offset } = parsePagination(q)

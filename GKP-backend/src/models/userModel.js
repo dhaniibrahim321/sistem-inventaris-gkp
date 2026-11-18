@@ -1,8 +1,5 @@
 const pool = require('../config/db')
 
-// Parameter `db` bisa berupa pool (query biasa) atau connection (di dalam transaksi).
-
-// Dipakai saat login: menyertakan hash password untuk diverifikasi bcrypt.
 async function findActiveByUsername(username, db = pool) {
   const [rows] = await db.query(
     `SELECT id_user, username, password, nama, role
@@ -14,7 +11,6 @@ async function findActiveByUsername(username, db = pool) {
   return rows[0] || null
 }
 
-// Dipakai middleware auth: memastikan akun pemilik token masih aktif.
 async function findActiveById(idUser, db = pool) {
   const [rows] = await db.query(
     `SELECT id_user, username, nama, role

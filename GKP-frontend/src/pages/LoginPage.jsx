@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import logoGKP from '../assets/logo_GKP.png';
@@ -53,9 +54,9 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-slate-100">
       <div className="bg-[#C2B6FE] p-8 rounded-3xl shadow-lg w-full max-w-md flex flex-col items-center">
         <div className="mb-6 flex flex-col items-center">
-          <img 
-            src={logoGKP} 
-            alt="Logo SIGKP" 
+          <img
+            src={logoGKP}
+            alt="Logo SIGKP"
             className="h-30 w-30 rounded-lg object-contain mb-2"
           />
         </div>
@@ -68,9 +69,11 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="w-full space-y-4">
           <div>
-            <label className="block text-sm font-semibold text-slate-800 mb-1">Username</label>
-            <input 
-              type="text" 
+            <label className="block text-sm font-semibold text-slate-800 mb-1">
+              Username
+            </label>
+            <input
+              type="text"
               placeholder="Masukkan username"
               value={username}
               onChange={(e) => {
@@ -82,9 +85,11 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-semibold text-slate-800 mb-1">Password</label>
-            <input 
-              type="password" 
+            <label className="block text-sm font-semibold text-slate-800 mb-1">
+              Password
+            </label>
+            <input
+              type="password"
               placeholder="Masukkan password"
               value={password}
               onChange={(e) => {
@@ -95,7 +100,13 @@ export default function LoginPage() {
             />
           </div>
 
-          <button 
+          {error && (
+            <p className="text-red-700 text-sm text-center">
+              {error}
+            </p>
+          )}
+
+          <button
             type="submit"
             disabled={loading}
             className="w-full mt-4 py-2.5 rounded-full bg-white/80 hover:bg-white text-slate-800 font-bold shadow transition disabled:opacity-60 disabled:cursor-not-allowed"

@@ -13,20 +13,19 @@
 CREATE DATABASE IF NOT EXISTS sigkp CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE sigkp;
 
--- ---------------------------------------------------------------------
--- users: akun dibuatkan oleh pengelola (tanpa registrasi publik)
--- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS users (
   id_user     INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   username    VARCHAR(50)  NOT NULL,
-  password    VARCHAR(255) NOT NULL,             -- hash bcrypt
-  role        VARCHAR(30)  NOT NULL DEFAULT 'admin_gudang',
+  password    VARCHAR(255) NOT NULL,
+  role        VARCHAR(30)  NOT NULL DEFAULT 'staf_gudang',
+  status      VARCHAR(20)  NOT NULL DEFAULT 'aktif',
   nama        VARCHAR(100) NOT NULL,
   is_deleted  TINYINT(1)   NOT NULL DEFAULT 0,
   created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT uq_users_username UNIQUE (username),
-  CONSTRAINT chk_users_deleted CHECK (is_deleted IN (0, 1))
+  CONSTRAINT chk_users_deleted CHECK (is_deleted IN (0, 1)),
+  CONSTRAINT chk_users_status CHECK (status IN ('pending', 'aktif', 'ditolak', 'nonaktif'))
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------------

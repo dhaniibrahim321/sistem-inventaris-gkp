@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 
 import logoGKP from '../../assets/logo_GKP.png'
+import { clearAuthSession, formatRoleLabel, getStoredUser } from '../../services/userService'
 
 const menuItems = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
@@ -26,8 +27,10 @@ const menuItems = [
 
 export default function Sidebar({ isOpen = false, onClose }) {
   const navigate = useNavigate()
+  const user = getStoredUser()
 
   const handleLogout = () => {
+    clearAuthSession()
     navigate('/')
   }
 
@@ -93,12 +96,16 @@ export default function Sidebar({ isOpen = false, onClose }) {
 
         <div className="border-t border-black/10 px-4 py-4">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-9 h-9 rounded-full bg-white/40 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-full bg-white/40 flex items-center justify-center shrink-0">
               <User size={18} className="text-slate-800" />
             </div>
-            <div>
-              <p className="text-sm font-medium text-slate-900">User</p>
-              <p className="text-xs text-slate-700">Role User</p>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-900 truncate">
+                {user?.nama || 'User'}
+              </p>
+              <p className="text-xs text-slate-700 truncate">
+                {formatRoleLabel(user?.role)}
+              </p>
             </div>
           </div>
           <button

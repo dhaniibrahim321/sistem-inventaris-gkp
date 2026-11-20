@@ -33,5 +33,13 @@ async function authenticate(req, res, next) {
   }
 }
 
+function requireSuperAdmin(req, res, next) {
+  if (!req.user || req.user.role !== 'super_admin') {
+    return next(new AppError('Akses ditolak. Fitur ini khusus Super Admin.', 403))
+  }
+  next()
+}
+
 module.exports = authenticate
 module.exports.authenticate = authenticate
+module.exports.requireSuperAdmin = requireSuperAdmin

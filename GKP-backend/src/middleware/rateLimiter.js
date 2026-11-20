@@ -25,4 +25,16 @@ const loginLimiter = rateLimit({
   },
 })
 
-module.exports = { apiLimiter, loginLimiter }
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    status: 'error',
+    message: 'Terlalu banyak percobaan pendaftaran dari perangkat Anda. Silakan coba lagi setelah 1 jam.',
+    data: null,
+  },
+})
+
+module.exports = { apiLimiter, loginLimiter, registerLimiter }

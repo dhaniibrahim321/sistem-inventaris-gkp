@@ -1,8 +1,6 @@
 require('dotenv').config()
 const mysql = require('mysql2/promise')
 
-// dateStrings: kolom DATE dikembalikan sebagai string "YYYY-MM-DD"
-// (bukan objek Date) agar tidak bergeser karena zona waktu.
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
   port: Number(process.env.DB_PORT || 3306),

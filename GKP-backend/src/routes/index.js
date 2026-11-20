@@ -3,7 +3,6 @@ const fs = require('fs')
 const path = require('path')
 const { sendSuccess } = require('../utils/response')
 
-// Health Check
 router.get('/health', (req, res) => sendSuccess(res, { message: 'SIGKP API berjalan.' }))
 
 // Registrasi modul rute secara otomatis jika file rute ada
@@ -23,5 +22,8 @@ for (const r of routes) {
   }
 }
 
-module.exports = router
+router.use('/dashboard', require('./dashboardRoutes'))
+router.use('/stok', require('./stokRoutes'))
+router.use('/opname', require('./opnameRoutes'))
 
+module.exports = router

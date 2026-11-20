@@ -1,28 +1,37 @@
+const jwt = require('jsonwebtoken')
+const AppError = require('../utils/AppError')
+const userModel = require('../models/userModel')
 
-const jwt = require('jsonwebtoken');
-
-function authenticate(req, res, next) {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({
-      success: false,
-      message: 'Token autentikasi tidak ditemukan.'
-    });
-  }
-
-  const token = authHeader.split(' ')[1];
-
+async function authenticate(req, res, next) {
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (error) {
-    return res.status(401).json({
-      success: false,
-      message: 'Token tidak valid atau sudah kedaluwarsa.'
-    });
+    const header = req.headers.authorization || ''
+    const [scheme, token] = header.split(' ')
+    if (scheme !== 'Bearer' || !token) {
+      throw new AppError('Token autentikasi tidak ditemukan.', 401)
+    }
+
+    let decoded
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] })
+    } catch (err) {
+      const message =
+        err.name === 'TokenExpiredError'
+          ? 'Sesi login sudah berakhir. Silakan login kembali.'
+          : 'Token autentikasi tidak valid.'
+      throw new AppError(message, 401)
+    }
+
+    const user = await userModel.findActiveById(decoded.id_user)
+    if (!user) {
+      throw new AppError('Akun tidak ditemukan atau sudah dinonaktifkan.', 401)
+    }
+
+    req.user = user
+    next()
+  } catch (err) {
+    next(err)
   }
 }
 
-module.exports = { authenticate };
+module.exports = authenticate
+module.exports.authenticate = authenticate

@@ -1,6 +1,10 @@
 
 const pool = require('../config/db');
 
+// ==========================================
+// CRUD BARANG
+// ==========================================
+
 async function getAll(q = '', kategori = '') {
   const keyword = `%${String(q).trim()}%`;
 
@@ -213,10 +217,47 @@ async function softDelete(id, oleh) {
   }
 }
 
+// ==========================================
+// FUNGSI PENCATATAN GUDANG
+// ==========================================
+
+async function findActiveById(idBarang, db = pool) {
+  const [rows] = await db.query(
+    `SELECT id_barang, sku, nama_barang, kategori
+     FROM barang
+     WHERE id_barang = ? AND is_deleted = 0
+     LIMIT 1`,
+    [idBarang]
+  );
+
+  return rows[0] || null;
+}
+
+async function lockActiveById(conn, idBarang) {
+  const [rows] = await conn.query(
+    `SELECT id_barang, sku, nama_barang
+     FROM barang
+     WHERE id_barang = ? AND is_deleted = 0
+     FOR UPDATE`,
+    [idBarang]
+  );
+
+  return rows[0] || null;
+}
+
+// ==========================================
+// EXPORT SEMUA FUNGSI
+// ==========================================
+
 module.exports = {
+  // CRUD barang
   getAll,
   getById,
   create,
   update,
-  softDelete
+  softDelete,
+
+  // Pencatatan gudang
+  findActiveById,
+  lockActiveById
 };

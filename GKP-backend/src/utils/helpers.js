@@ -1,17 +1,9 @@
 const AppError = require('./AppError')
 const pool = require('../config/db')
 
-// ---------------------------------------------------------------------
-// Async & transaksi
-// ---------------------------------------------------------------------
-
-// Membungkus handler async agar error otomatis diteruskan ke errorHandler.
 const asyncHandler = (fn) => (req, res, next) =>
   Promise.resolve(fn(req, res, next)).catch(next)
 
-// Menjalankan callback di dalam satu transaksi (BEGIN -> COMMIT / ROLLBACK).
-// Jika ROLLBACK gagal (mis. koneksi putus), koneksi dihancurkan agar tidak
-// dikembalikan ke pool dalam keadaan transaksi menggantung.
 async function withTransaction(callback) {
   const conn = await pool.getConnection()
   let reusable = true
@@ -33,15 +25,9 @@ async function withTransaction(callback) {
   }
 }
 
-// ---------------------------------------------------------------------
-// Validasi input (semua fungsi melempar AppError 400 jika tidak valid)
-// ---------------------------------------------------------------------
-
 const MAX_INT = 2147483647
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
-// Hanya menerima number bulat atau string berisi digit murni.
-// Menolak: "", " ", "1e3", "0x10", "5.5", true, [], {}, null.
 function parseIntStrict(value) {
   if (typeof value === 'number') return Number.isSafeInteger(value) ? value : NaN
   if (typeof value === 'string' && /^\s*-?\d+\s*$/.test(value)) {
@@ -78,7 +64,6 @@ function optionalPositiveInt(value, label, opts) {
   return requirePositiveInt(value, label, opts)
 }
 
-// Validasi tanggal kalender sungguhan (menolak 2026-02-31, 2026-13-01, dst).
 function isValidDate(value) {
   if (typeof value !== 'string' || !DATE_RE.test(value)) return false
   const [y, m, d] = value.split('-').map(Number)
@@ -100,7 +85,6 @@ function optionalDate(value, label) {
   return requireDate(value, label)
 }
 
-// Sanitasi ringan: membuang < dan > agar teks tidak bisa membawa tag HTML.
 const stripTags = (s) => s.replace(/[<>]/g, '')
 
 function requireString(value, label, { max = 255, sanitize = true } = {}) {
@@ -130,11 +114,8 @@ function optionalBoolean(value) {
   return ['1', 'true', 'ya', 'yes'].includes(String(value).toLowerCase())
 }
 
-// Escape karakter wildcard LIKE (% dan _) agar pencarian literal.
 const escapeLike = (s) => s.replace(/[\\%_]/g, '\\$&')
 
-// Tanggal "hari ini" menurut zona waktu bisnis (default Asia/Jakarta),
-// bukan zona waktu server (server cloud biasanya UTC).
 function todayInAppTimezone() {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: process.env.APP_TIMEZONE || 'Asia/Jakarta',
@@ -148,10 +129,6 @@ function maxJumlahTransaksi() {
   const n = Number(process.env.MAX_JUMLAH_TRANSAKSI)
   return Number.isSafeInteger(n) && n > 0 ? Math.min(n, MAX_INT) : 1000000
 }
-
-// ---------------------------------------------------------------------
-// Pagination server-side
-// ---------------------------------------------------------------------
 
 function parsePagination(query = {}, { defaultLimit = 10, maxLimit = 100 } = {}) {
   const page = query.page === undefined || query.page === '' ? 1 : parseIntStrict(query.page)

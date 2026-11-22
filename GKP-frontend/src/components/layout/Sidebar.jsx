@@ -101,7 +101,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
             </div>
             <div className="min-w-0">
               <p className="text-sm font-medium text-slate-900 truncate">
-                {user?.nama || 'User'}
+                {user?.nama || 'Admin'}
               </p>
               <p className="text-xs text-slate-700 truncate">
                 {formatRoleLabel(user?.role)}
@@ -109,11 +109,12 @@ export default function Sidebar({ isOpen = false, onClose }) {
             </div>
           </div>
           <button
+            type="button"
             onClick={handleLogout}
-            className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-slate-800 hover:bg-black/10 transition-colors duration-200"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-slate-800 hover:bg-red-500/20 hover:text-red-900 transition-colors duration-200"
           >
             <LogOut size={18} />
-            <span>Logout</span>
+            <span>Keluar</span>
           </button>
         </div>
       </aside>

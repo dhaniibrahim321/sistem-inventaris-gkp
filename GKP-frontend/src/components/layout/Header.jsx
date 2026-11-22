@@ -67,7 +67,7 @@ export default function Header({ onMenuClick }) {
           <div className="flex items-center gap-3">
             <div className="text-right hidden sm:block">
               <p className="text-sm font-medium text-slate-700">
-                {user?.nama || 'User'}
+                {user?.nama || 'Admin'}
               </p>
               <p className="text-xs text-slate-400">
                 {formatRoleLabel(user?.role)}

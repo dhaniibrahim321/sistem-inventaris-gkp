@@ -7,25 +7,30 @@ import {
   Store,
   ArrowRight,
   CalendarDays,
-  MapPin,
   FileText,
   CheckCircle2,
   Layers,
   Loader2,
+  Pencil,
+  AlertTriangle,
 } from 'lucide-react'
 
+import { Button, Modal } from '../components/common'
 import {
   buatEntriRiwayat,
   tambahRiwayat,
 } from '../services/riwayatService'
-import { tambahKloterBarang } from '../services/barangService'
+import {
+  tambahKloterBarang,
+  setStokKloter,
+} from '../services/barangService'
 import {
   getStokView,
   nomorKloterBerikutnya,
 } from '../utils/kloterHelpers'
-import { todayISOString } from '../utils/dateHelpers'
+import { todayISOString, formatTanggal } from '../utils/dateHelpers'
 import { simpanBarangMasuk } from '../services/barangMasukService'
-import { getDaftarStok } from '../services/stokService'
+import * as stokService from '../services/stokService'
 
 const inputClass =
   'w-full rounded-lg border bg-white py-2.5 text-sm outline-none transition ' +
@@ -49,18 +54,19 @@ export default function BarangMasukPage({
   async function muatDataBarang() {
     setLoading(true)
     try {
-      const res = await getDaftarStok({ limit: 1000 })
+      const res = await stokService.getDaftarStok({ limit: 1000 })
       if (res?.data && Array.isArray(res.data)) {
         const mapped = res.data.map((b) => ({
           id: b.id_barang,
           sku: b.sku,
           nama: b.nama_barang,
-          kategori: b.kategori,
+          varian: b.varian || '',
+          brand: b.brand || '',
           satuan: b.satuan || 'pcs',
           gambar: b.foto_url || null,
           stokGudang: Number(b.stok_gudang || 0),
           stokDisplay: Number(b.stok_display || 0),
-          totalStok: Number(b.total || 0),
+          totalStok: Number(b.total || b.total_stok || 0),
           kloter: (b.kloter || []).map((k) => ({
             id: k.id_kloter,
             nomor: String(k.nama_kloter || '').replace(/[^0-9]/g, '') || k.nama_kloter || 1,
@@ -108,10 +114,25 @@ export default function BarangMasukPage({
     barangAktif.find((item) => item.id === selectedId) || null
 
   const [jumlah, setJumlah] = useState('')
-  const [lokasiRak, setLokasiRak] = useState('')
   const [tanggalKadaluarsa, setTanggalKadaluarsa] = useState('')
   const [tanggalMasuk, setTanggalMasuk] = useState(todayISOString())
   const [catatan, setCatatan] = useState('')
+
+  // Opsi Kloter Masuk: 'baru' atau 'ada' (tambah ke kloter yang sudah ada)
+  const [modeKloter, setModeKloter] = useState('baru')
+  const [idKloterTerpilih, setIdKloterTerpilih] = useState('')
+
+  // Modal Koreksi / Edit Jumlah Kloter
+  const [modalKoreksiOpen, setModalKoreksiOpen] = useState(false)
+  const [koreksiSearch, setKoreksiSearch] = useState('')
+  const [koreksiBarangId, setKoreksiBarangId] = useState('')
+  const [koreksiKloterId, setKoreksiKloterId] = useState('')
+  const [koreksiStokGudang, setKoreksiStokGudang] = useState('')
+  const [koreksiStokDisplay, setKoreksiStokDisplay] = useState('')
+  const [koreksiCatatan, setKoreksiCatatan] = useState('')
+  const [koreksiSubmitting, setKoreksiSubmitting] = useState(false)
+  const [koreksiError, setKoreksiError] = useState('')
+  const [koreksiSuccess, setKoreksiSuccess] = useState('')
 
   const [errors, setErrors] = useState({})
   const [successMessage, setSuccessMessage] = useState('')
@@ -134,9 +155,23 @@ export default function BarangMasukPage({
     return barangAktif.filter(
       (item) =>
         String(item.nama ?? '').toLowerCase().includes(keyword) ||
+        String(item.varian ?? '').toLowerCase().includes(keyword) ||
+        String(item.brand ?? '').toLowerCase().includes(keyword) ||
         String(item.sku ?? '').toLowerCase().includes(keyword)
     )
   }, [barangAktif, search])
+
+  const koreksiBarangFiltered = useMemo(() => {
+    const keyword = koreksiSearch.trim().toLowerCase()
+    if (!keyword) return barangAktif
+    return barangAktif.filter(
+      (item) =>
+        String(item.sku ?? '').toLowerCase().includes(keyword) ||
+        String(item.nama ?? '').toLowerCase().includes(keyword) ||
+        String(item.varian ?? '').toLowerCase().includes(keyword) ||
+        String(item.brand ?? '').toLowerCase().includes(keyword)
+    )
+  }, [barangAktif, koreksiSearch])
 
   useEffect(() => {
     if (selectedId === null) return
@@ -147,10 +182,11 @@ export default function BarangMasukPage({
 
   function resetForm() {
     setJumlah('')
-    setLokasiRak('')
     setTanggalKadaluarsa('')
     setTanggalMasuk(todayISOString())
     setCatatan('')
+    setModeKloter('baru')
+    setIdKloterTerpilih('')
     setErrors({})
   }
 
@@ -171,11 +207,11 @@ export default function BarangMasukPage({
       errs.jumlah = 'Jumlah barang harus lebih dari 0.'
     }
 
-    if (!lokasiRak.trim()) {
-      errs.lokasiRak = 'Lokasi rak gudang wajib diisi.'
+    if (modeKloter === 'ada' && !idKloterTerpilih) {
+      errs.kloter = 'Pilih kloter yang ingin ditambahkan stoknya.'
     }
 
-    if (!tanggalKadaluarsa) {
+    if (modeKloter === 'baru' && !tanggalKadaluarsa) {
       errs.tanggalKadaluarsa = 'Tanggal kedaluwarsa wajib dipilih.'
     }
 
@@ -184,6 +220,7 @@ export default function BarangMasukPage({
     }
 
     if (
+      modeKloter === 'baru' &&
       tanggalKadaluarsa &&
       tanggalMasuk &&
       tanggalKadaluarsa < tanggalMasuk
@@ -211,55 +248,77 @@ export default function BarangMasukPage({
     setErrors({})
     setSuccessMessage('')
 
+    const isKloterAda = modeKloter === 'ada' && Boolean(idKloterTerpilih)
+    const kloterAdaObj = isKloterAda
+      ? (selectedItem.kloter || []).find(
+          (k) => String(k.id) === String(idKloterTerpilih)
+        )
+      : null
+
+    const expDate = isKloterAda && kloterAdaObj?.tanggalKadaluarsa
+      ? kloterAdaObj.tanggalKadaluarsa
+      : tanggalKadaluarsa
+
     try {
       const payload = {
         id_barang: selectedItem.id,
         jumlah: jumlahMasuk,
         tanggal_masuk: tanggalMasuk,
-        tanggal_kedaluwarsa: tanggalKadaluarsa,
-        lokasi_rak: lokasiRak.trim(),
+        tanggal_kedaluwarsa: expDate,
+        ...(isKloterAda ? { id_kloter: Number(idKloterTerpilih) } : {}),
         catatan: catatan.trim() || undefined,
       }
       const res = await simpanBarangMasuk(payload)
 
-      const kloterNomor = res?.data?.nama_kloter
+      const kloterNomor = isKloterAda
+        ? kloterAdaObj?.nomor || idKloterTerpilih
+        : res?.data?.nama_kloter
         ? String(res.data.nama_kloter).replace(/[^0-9]/g, '') || kloterBerikutnya
         : kloterBerikutnya
 
       if (typeof setBarang === 'function') {
-        const kloterBaru = {
-          id: res?.data?.id_kloter || Date.now(),
-          nomor: kloterNomor,
-          jumlah: jumlahMasuk,
-          jumlahAwal: jumlahMasuk,
-          stokGudang: jumlahMasuk,
-          stokDisplay: 0,
-          tanggalMasuk,
-          tanggalKadaluarsa,
-          lokasiRak,
-          catatan,
+        if (!isKloterAda) {
+          const kloterBaru = {
+            id: res?.data?.id_kloter || Date.now(),
+            nomor: kloterNomor,
+            jumlah: jumlahMasuk,
+            jumlahAwal: jumlahMasuk,
+            stokGudang: jumlahMasuk,
+            stokDisplay: 0,
+            tanggalMasuk,
+            tanggalKadaluarsa: expDate,
+            catatan,
+          }
+          setBarang((prev) =>
+            tambahKloterBarang(prev, selectedItem.id, kloterBaru)
+          )
         }
-        setBarang((prev) => tambahKloterBarang(prev, selectedItem.id, kloterBaru))
       }
 
       const catatanTrim = catatan.trim()
       if (typeof setRiwayat === 'function') {
+        const namaLog = selectedItem.varian
+          ? `${selectedItem.nama} (${selectedItem.varian})`
+          : selectedItem.nama
         setRiwayat((prev) =>
           tambahRiwayat(
             prev,
             buatEntriRiwayat({
               jenis: 'masuk',
               sku: selectedItem.sku,
-              nama: selectedItem.nama,
+              nama: namaLog,
               tanggalTransaksi: tanggalMasuk,
               jumlah: jumlahMasuk,
               kloter: kloterNomor,
               keterangan:
-                `Barang masuk +${jumlahMasuk} ${satuan} (Kloter ${kloterNomor}). ` +
-                `Lokasi rak: ${lokasiRak.trim()}. ` +
+                `Barang masuk +${jumlahMasuk} ${satuan} (${
+                  isKloterAda ? `Penambahan ke Kloter ${kloterNomor}` : `Kloter ${kloterNomor}`
+                }). ` +
                 `Tanggal masuk: ${tanggalMasuk}. ` +
-                `Tanggal kedaluwarsa: ${tanggalKadaluarsa}. ` +
-                `Stok gudang ${stokView.gudang} → ${stokView.gudang + jumlahMasuk}.` +
+                `Tanggal kedaluwarsa: ${expDate}. ` +
+                `Stok gudang ${stokView.gudang} → ${
+                  stokView.gudang + jumlahMasuk
+                }.` +
                 (catatanTrim ? ` Catatan: ${catatanTrim}` : ''),
             })
           )
@@ -267,7 +326,9 @@ export default function BarangMasukPage({
       }
 
       setSuccessMessage(
-        `${jumlahMasuk} ${satuan} "${selectedItem.nama}" (Kloter ${kloterNomor}) berhasil ditambahkan ke stok gudang.`
+        `${jumlahMasuk} ${satuan} "${selectedItem.nama}" (${
+          isKloterAda ? `Penambahan ke Kloter ${kloterNomor}` : `Kloter Baru ${kloterNomor}`
+        }) berhasil ditambahkan ke stok gudang.`
       )
 
       resetForm()
@@ -283,17 +344,180 @@ export default function BarangMasukPage({
     }
   }
 
+  // Helper untuk modal koreksi
+  const koreksiBarang =
+    barangAktif.find((b) => String(b.id) === String(koreksiBarangId)) || null
+  const koreksiKloter =
+    koreksiBarang?.kloter?.find(
+      (k) => String(k.id) === String(koreksiKloterId)
+    ) || null
+
+  function pilihBarangUntukKoreksi(b) {
+    if (!b) {
+      setKoreksiBarangId('')
+      setKoreksiKloterId('')
+      setKoreksiStokGudang('')
+      setKoreksiStokDisplay('')
+      return
+    }
+    setKoreksiBarangId(String(b.id))
+    if (b.kloter?.length > 0) {
+      const firstK = b.kloter[0]
+      setKoreksiKloterId(String(firstK.id))
+      setKoreksiStokGudang(String(firstK.stokGudang))
+      setKoreksiStokDisplay(String(firstK.stokDisplay))
+    } else {
+      setKoreksiKloterId('')
+      setKoreksiStokGudang('')
+      setKoreksiStokDisplay('')
+    }
+  }
+
+  function handleKoreksiSearchChange(value) {
+    setKoreksiSearch(value)
+    const keyword = value.trim().toLowerCase()
+    const matched = !keyword
+      ? barangAktif
+      : barangAktif.filter(
+          (item) =>
+            String(item.sku ?? '').toLowerCase().includes(keyword) ||
+            String(item.nama ?? '').toLowerCase().includes(keyword) ||
+            String(item.varian ?? '').toLowerCase().includes(keyword) ||
+            String(item.brand ?? '').toLowerCase().includes(keyword)
+        )
+    const masihAda = matched.some((item) => String(item.id) === String(koreksiBarangId))
+    if (!masihAda) {
+      pilihBarangUntukKoreksi(matched[0] || null)
+    }
+  }
+
+  async function handleSimpanKoreksi(e) {
+    e.preventDefault()
+    if (!koreksiKloterId || !koreksiKloter) {
+      setKoreksiError('Pilih kloter yang ingin disesuaikan.')
+      return
+    }
+
+    const g = Number(koreksiStokGudang)
+    const d = Number(koreksiStokDisplay)
+    if (
+      koreksiStokGudang === '' ||
+      koreksiStokDisplay === '' ||
+      !Number.isInteger(g) ||
+      !Number.isInteger(d) ||
+      g < 0 ||
+      d < 0
+    ) {
+      setKoreksiError(
+        'Jumlah stok gudang dan display harus berupa bilangan bulat 0 atau lebih.'
+      )
+      return
+    }
+
+    if (koreksiKloter.jumlahAwal && g + d > koreksiKloter.jumlahAwal) {
+      setKoreksiError(
+        `Gudang + display (${g + d}) tidak boleh melebihi jumlah masuk awal Kloter ${koreksiKloter.nomor} (${koreksiKloter.jumlahAwal}).`
+      )
+      return
+    }
+
+    const gudangLama = koreksiKloter.stokGudang
+    const displayLama = koreksiKloter.stokDisplay
+    const nomorKloter = koreksiKloter.nomor
+    const catatanTrim = koreksiCatatan.trim()
+
+    setKoreksiSubmitting(true)
+    setKoreksiError('')
+    try {
+      await stokService.sesuaikanStokKloter(koreksiKloterId, {
+        stok_gudang: g,
+        stok_display: d,
+        catatan: catatanTrim || undefined,
+      })
+
+      if (typeof setBarang === 'function') {
+        setBarang((prev) =>
+          setStokKloter(prev, Number(koreksiBarangId), koreksiKloterId, {
+            stokGudang: g,
+            stokDisplay: d,
+          })
+        )
+      }
+
+      if (
+        typeof setRiwayat === 'function' &&
+        koreksiBarang &&
+        (g !== gudangLama || d !== displayLama)
+      ) {
+        const namaLog = koreksiBarang.varian
+          ? `${koreksiBarang.nama} (${koreksiBarang.varian})`
+          : koreksiBarang.nama
+        setRiwayat((prev) =>
+          tambahRiwayat(
+            prev,
+            buatEntriRiwayat({
+              jenis: 'stok',
+              sku: koreksiBarang.sku,
+              nama: namaLog,
+              kloter: nomorKloter,
+              keterangan:
+                `Koreksi / penyesuaian stok Kloter ${nomorKloter}: ` +
+                `Gudang ${gudangLama} → ${g}, Display ${displayLama} → ${d}.` +
+                (catatanTrim ? ` Catatan: ${catatanTrim}` : ''),
+            })
+          )
+        )
+      }
+
+      setKoreksiSuccess('Jumlah stok kloter berhasil disesuaikan!')
+      await muatDataBarang()
+      setTimeout(() => {
+        setModalKoreksiOpen(false)
+        setKoreksiSuccess('')
+      }, 900)
+    } catch (err) {
+      setKoreksiError(
+        err.response?.data?.message ||
+          err.message ||
+          'Gagal menyesuaikan stok kloter.'
+      )
+    } finally {
+      setKoreksiSubmitting(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-800">
-          Pencatatan Barang
-        </h1>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">
+            Pencatatan Barang
+          </h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Catat barang yang masuk ke gudang per kloter.
+          </p>
+        </div>
 
-        <p className="mt-1 text-sm text-gray-500">
-          Catat barang yang masuk ke gudang dan tentukan lokasi
-          penyimpanannya.
-        </p>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            setModalKoreksiOpen(true)
+            setKoreksiSearch('')
+            setKoreksiCatatan('')
+            setKoreksiError('')
+            setKoreksiSuccess('')
+            if (selectedItem) {
+              pilihBarangUntukKoreksi(selectedItem)
+            } else if (barangAktif.length > 0) {
+              pilihBarangUntukKoreksi(barangAktif[0])
+            }
+          }}
+          className="border-[#8A7CD9] text-[#5B528D] hover:bg-[#8A7CD9]/10"
+        >
+          <Pencil size={15} className="mr-1.5" />
+          Koreksi / Edit Jumlah Stok Kloter
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
@@ -385,16 +609,19 @@ export default function BarangMasukPage({
                         </div>
 
                         <div className="min-w-0 flex-1">
-                          <p className="truncate font-semibold text-gray-800">
-                            {item.nama || 'Tanpa nama'}
-                          </p>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <p className="truncate font-semibold text-gray-800">
+                              {item.nama || 'Tanpa nama'}
+                            </p>
+                            {item.varian && (
+                              <span className="rounded bg-[#8A7CD9]/15 px-1.5 py-0.5 text-[11px] font-medium text-[#5B528D]">
+                                {item.varian}
+                              </span>
+                            )}
+                          </div>
 
                           <p className="mt-1 text-xs text-gray-500">
-                            SKU: {item.sku || '-'}
-                          </p>
-
-                          <p className="mt-1 text-xs text-gray-500">
-                            {item.kategori || 'Tanpa kategori'}
+                            SKU: {item.sku || '-'} • Brand: {item.brand || '-'}
                           </p>
                         </div>
 
@@ -452,13 +679,20 @@ export default function BarangMasukPage({
                   <div className="space-y-4 rounded-lg bg-gray-50 p-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
-                        <p className="truncate font-semibold text-gray-800">
-                          {selectedItem.nama}
-                        </p>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <p className="truncate font-semibold text-gray-800">
+                            {selectedItem.nama}
+                          </p>
+                          {selectedItem.varian && (
+                            <span className="rounded bg-[#8A7CD9]/15 px-2 py-0.5 text-[11px] font-medium text-[#5B528D]">
+                              {selectedItem.varian}
+                            </span>
+                          )}
+                        </div>
 
                         <p className="mt-0.5 text-xs text-gray-500">
-                          SKU: {selectedItem.sku || '-'} •{' '}
-                          {selectedItem.kategori || 'Tanpa kategori'}
+                          SKU: {selectedItem.sku || '-'} • Brand:{' '}
+                          {selectedItem.brand || '-'}
                         </p>
                       </div>
 
@@ -522,21 +756,104 @@ export default function BarangMasukPage({
                   </div>
 
                   <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="flex items-start gap-3 rounded-lg border border-[#C2B6FE] bg-[#EDEAFF]/60 px-4 py-3">
-                      <Layers
-                        size={18}
-                        className="mt-0.5 shrink-0 text-[#5B528D]"
-                      />
-                      <div>
-                        <p className="text-sm font-semibold text-[#5B528D]">
-                          Kloter {kloterBerikutnya}
-                        </p>
-                        <p className="mt-0.5 text-xs text-gray-500">
-                          Setiap pencatatan barang masuk akan membuat kloter
-                          baru.
-                        </p>
+                    {/* OPSI KLOTER: BUAT BARU ATAU TAMBAH KE KLOTER YANG SUDAH ADA */}
+                    {selectedItem?.kloter?.length > 0 ? (
+                      <div className="space-y-2.5 rounded-lg border border-[#C2B6FE] bg-[#EDEAFF]/40 p-3.5">
+                        <label className="block text-xs font-semibold text-[#5B528D]">
+                          Pilihan Kloter Masuk:
+                        </label>
+                        <div className="flex flex-wrap gap-4 text-sm">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="modeKloter"
+                              value="baru"
+                              checked={modeKloter === 'baru'}
+                              onChange={() => {
+                                setModeKloter('baru')
+                                setIdKloterTerpilih('')
+                              }}
+                              className="text-[#8A7CD9] focus:ring-[#8A7CD9]"
+                            />
+                            <span className="font-medium text-slate-800">
+                              Buat Kloter Baru (Kloter {kloterBerikutnya})
+                            </span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="modeKloter"
+                              value="ada"
+                              checked={modeKloter === 'ada'}
+                              onChange={() => {
+                                setModeKloter('ada')
+                                if (selectedItem?.kloter?.length > 0) {
+                                  const pertama = selectedItem.kloter[0]
+                                  setIdKloterTerpilih(String(pertama.id))
+                                  if (pertama.tanggalKadaluarsa) {
+                                    setTanggalKadaluarsa(pertama.tanggalKadaluarsa)
+                                  }
+                                }
+                              }}
+                              className="text-[#8A7CD9] focus:ring-[#8A7CD9]"
+                            />
+                            <span className="font-medium text-slate-800">
+                              Tambah ke Kloter yang Sudah Ada
+                            </span>
+                          </label>
+                        </div>
+
+                        {modeKloter === 'ada' && (
+                          <div className="pt-2">
+                            <label className="block text-xs text-slate-600 mb-1">
+                              Pilih Kloter yang ingin ditambahkan stoknya:
+                            </label>
+                            <select
+                              value={idKloterTerpilih}
+                              onChange={(e) => {
+                                const val = e.target.value
+                                setIdKloterTerpilih(val)
+                                const k = selectedItem.kloter.find(
+                                  (itemK) => String(itemK.id) === val
+                                )
+                                if (k?.tanggalKadaluarsa) {
+                                  setTanggalKadaluarsa(k.tanggalKadaluarsa)
+                                }
+                              }}
+                              className={`${inputClass} px-3 py-2 border-slate-300`}
+                            >
+                              {selectedItem.kloter.map((k) => (
+                                <option key={k.id} value={String(k.id)}>
+                                  Kloter {k.nomor} — Stok Gudang: {k.stokGudang} {satuan} — Exp: {k.tanggalKadaluarsa ? formatTanggal(k.tanggalKadaluarsa) : '-'}
+                                </option>
+                              ))}
+                            </select>
+                            {errors.kloter && (
+                              <FieldError>{errors.kloter}</FieldError>
+                            )}
+                            <p className="mt-1 text-xs text-[#5B528D]">
+                              * Stok yang diinput akan ditambahkan ke kloter yang dipilih (berguna jika sebelumnya input barang kurang).
+                            </p>
+                          </div>
+                        )}
                       </div>
-                    </div>
+                    ) : (
+                      <div className="flex items-start gap-3 rounded-lg border border-[#C2B6FE] bg-[#EDEAFF]/60 px-4 py-3">
+                        <Layers
+                          size={18}
+                          className="mt-0.5 shrink-0 text-[#5B528D]"
+                        />
+                        <div>
+                          <p className="text-sm font-semibold text-[#5B528D]">
+                            Kloter {kloterBerikutnya}
+                          </p>
+                          <p className="mt-0.5 text-xs text-gray-500">
+                            Setiap pencatatan barang masuk akan membuat kloter
+                            baru.
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
                     <div>
                       <label
@@ -562,40 +879,10 @@ export default function BarangMasukPage({
 
                     <div>
                       <label
-                        htmlFor="lokasi-rak"
-                        className="mb-2 block text-sm font-medium text-gray-700"
-                      >
-                        Lokasi Rak Gudang
-                      </label>
-
-                      <div className="relative">
-                        <MapPin
-                          size={18}
-                          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                        />
-
-                        <input
-                          id="lokasi-rak"
-                          type="text"
-                          value={lokasiRak}
-                          onChange={(e) => setLokasiRak(e.target.value)}
-                          placeholder="Contoh: Rak A-01"
-                          className={`${inputClass} pl-10 pr-4 ${
-                            errors.lokasiRak
-                              ? 'border-red-400'
-                              : 'border-gray-300'
-                          }`}
-                        />
-                      </div>
-                      <FieldError>{errors.lokasiRak}</FieldError>
-                    </div>
-
-                    <div>
-                      <label
                         htmlFor="tanggal-kedaluwarsa"
                         className="mb-2 block text-sm font-medium text-gray-700"
                       >
-                        Tanggal Kedaluwarsa
+                        Tanggal Kedaluwarsa {modeKloter === 'ada' ? '(Mengikuti Kloter)' : ''}
                       </label>
 
                       <div className="relative">
@@ -608,6 +895,7 @@ export default function BarangMasukPage({
                           id="tanggal-kedaluwarsa"
                           type="date"
                           value={tanggalKadaluarsa}
+                          disabled={modeKloter === 'ada'}
                           onChange={(e) =>
                             setTanggalKadaluarsa(e.target.value)
                           }
@@ -615,7 +903,7 @@ export default function BarangMasukPage({
                             errors.tanggalKadaluarsa
                               ? 'border-red-400'
                               : 'border-gray-300'
-                          }`}
+                          } ${modeKloter === 'ada' ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`}
                         />
                       </div>
                       <FieldError>{errors.tanggalKadaluarsa}</FieldError>
@@ -709,6 +997,194 @@ export default function BarangMasukPage({
           </div>
         </section>
       </div>
+
+      {/* MODAL KOREKSI / EDIT JUMLAH BARANG KLOTER */}
+      <Modal
+        isOpen={modalKoreksiOpen}
+        onClose={() => setModalKoreksiOpen(false)}
+        title="Koreksi / Edit Jumlah Barang Kloter"
+        size="md"
+      >
+        <form onSubmit={handleSimpanKoreksi} className="space-y-4">
+          <p className="text-xs text-slate-500">
+            Gunakan fitur ini untuk memperbaiki kesalahan input, seperti kelebihan jumlah barang pada kloter tertentu atau penyesuaian stok gudang/display.
+          </p>
+
+          <div>
+            <label
+              htmlFor="koreksi-search"
+              className="block text-sm font-medium text-slate-700 mb-1"
+            >
+              Cari Barang (SKU / Nama)
+            </label>
+            <div className="relative">
+              <Search
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+              <input
+                id="koreksi-search"
+                type="text"
+                value={koreksiSearch}
+                onChange={(e) => handleKoreksiSearchChange(e.target.value)}
+                placeholder="Ketik SKU, nama barang, varian, atau brand..."
+                className="w-full rounded-lg border border-slate-300 pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8A7CD9]"
+              />
+            </div>
+            <p className="mt-1 text-[11px] text-slate-400">
+              Menampilkan {koreksiBarangFiltered.length} dari {barangAktif.length} barang
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Pilih Barang
+            </label>
+            <select
+              value={koreksiBarangId}
+              onChange={(e) => {
+                const b = barangAktif.find(
+                  (item) => String(item.id) === e.target.value
+                )
+                pilihBarangUntukKoreksi(b || null)
+              }}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8A7CD9]"
+            >
+              <option value="">-- Pilih Barang --</option>
+              {koreksiBarangFiltered.map((b) => (
+                <option key={b.id} value={String(b.id)}>
+                  {b.sku} - {b.nama}
+                  {b.varian ? ` (${b.varian})` : ''}
+                  {b.brand ? ` • ${b.brand}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {koreksiBarang && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Pilih Kloter
+              </label>
+              {koreksiBarang.kloter?.length === 0 ? (
+                <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                  Barang ini belum memiliki kloter.
+                </p>
+              ) : (
+                <select
+                  value={koreksiKloterId}
+                  onChange={(e) => {
+                    const kId = e.target.value
+                    setKoreksiKloterId(kId)
+                    const k = koreksiBarang.kloter.find((item) => String(item.id) === kId)
+                    if (k) {
+                      setKoreksiStokGudang(String(k.stokGudang))
+                      setKoreksiStokDisplay(String(k.stokDisplay))
+                    }
+                  }}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8A7CD9]"
+                >
+                  {koreksiBarang.kloter.map((k) => (
+                    <option key={k.id} value={String(k.id)}>
+                      Kloter {k.nomor} (Gudang: {k.stokGudang}, Display: {k.stokDisplay}) - Exp: {k.tanggalKadaluarsa ? formatTanggal(k.tanggalKadaluarsa) : '-'}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          )}
+
+          {koreksiKloter && (
+            <>
+              <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                Total saat ini:{' '}
+                <strong>
+                  {koreksiKloter.stokGudang + koreksiKloter.stokDisplay} pcs
+                </strong>{' '}
+                (Gudang {koreksiKloter.stokGudang} + Display{' '}
+                {koreksiKloter.stokDisplay}). Batas masuk awal kloter:{' '}
+                <strong>{koreksiKloter.jumlahAwal} pcs</strong>.
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-1">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Jumlah Stok Gudang
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={koreksiStokGudang}
+                  onChange={(e) => setKoreksiStokGudang(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8A7CD9]"
+                  placeholder="0"
+                  required
+                />
+                <p className="text-[11px] text-slate-400 mt-1">Stok fisik di gudang</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Jumlah Stok Display
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={koreksiStokDisplay}
+                  onChange={(e) => setKoreksiStokDisplay(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8A7CD9]"
+                  placeholder="0"
+                  required
+                />
+                <p className="text-[11px] text-slate-400 mt-1">Stok fisik di display</p>
+              </div>
+            </div>
+            </>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Alasan / Catatan Koreksi
+            </label>
+            <input
+              type="text"
+              value={koreksiCatatan}
+              onChange={(e) => setKoreksiCatatan(e.target.value)}
+              placeholder="Contoh: Koreksi kelebihan input barang masuk"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8A7CD9]"
+            />
+          </div>
+
+          {koreksiError && (
+            <div className="p-3 rounded-lg bg-red-50 text-red-600 text-sm">
+              {koreksiError}
+            </div>
+          )}
+
+          {koreksiSuccess && (
+            <div className="p-3 rounded-lg bg-emerald-50 text-emerald-700 text-sm flex items-center gap-2">
+              <CheckCircle2 size={16} />
+              {koreksiSuccess}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-3 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setModalKoreksiOpen(false)}
+            >
+              Tutup
+            </Button>
+            <Button
+              type="submit"
+              disabled={koreksiSubmitting || !koreksiKloterId}
+            >
+              {koreksiSubmitting ? 'Menyimpan...' : 'Simpan Koreksi Stok'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

@@ -25,20 +25,30 @@ exports.createBarangMasuk = asyncHandler(async (req, res) => {
     max: maxJumlahTransaksi(),
   })
   const tanggalMasuk = requireDate(body.tanggal_masuk, 'Tanggal masuk')
-  const tanggalKedaluwarsa = requireDate(body.tanggal_kedaluwarsa, 'Tanggal kedaluwarsa')
   const lokasiRak = optionalString(body.lokasi_rak, 'Lokasi rak', { max: 100 })
   const catatan = optionalString(body.catatan, 'Catatan', { max: 1000 })
   let namaKloter = optionalString(body.nama_kloter, 'Nama kloter', { max: 50 })
+  const idKloterPilihan = optionalPositiveInt(body.id_kloter, 'id_kloter')
 
   const today = todayInAppTimezone()
   if (tanggalMasuk > today) {
     throw new AppError('Tanggal masuk tidak boleh melebihi tanggal hari ini.', 400)
   }
-  if (tanggalKedaluwarsa <= tanggalMasuk) {
-    throw new AppError('Tanggal kedaluwarsa harus setelah tanggal masuk.', 400)
-  }
-  if (tanggalKedaluwarsa < today) {
-    throw new AppError('Barang yang sudah kedaluwarsa tidak dapat dicatat sebagai barang masuk.', 400)
+
+  const tanggalKedaluwarsa = body.tanggal_kedaluwarsa
+    ? requireDate(body.tanggal_kedaluwarsa, 'Tanggal kedaluwarsa')
+    : null
+
+  if (!idKloterPilihan) {
+    if (!tanggalKedaluwarsa) {
+      throw new AppError('Tanggal kedaluwarsa wajib diisi untuk kloter baru.', 400)
+    }
+    if (tanggalKedaluwarsa <= tanggalMasuk) {
+      throw new AppError('Tanggal kedaluwarsa harus setelah tanggal masuk.', 400)
+    }
+    if (tanggalKedaluwarsa < today) {
+      throw new AppError('Barang yang sudah kedaluwarsa tidak dapat dicatat sebagai barang masuk.', 400)
+    }
   }
 
   const conn = await pool.getConnection()
@@ -53,22 +63,45 @@ exports.createBarangMasuk = asyncHandler(async (req, res) => {
       throw new AppError('Barang tidak ditemukan atau sudah dihapus.', 404)
     }
 
-    if (!namaKloter) {
-      namaKloter = `Kloter ${await kloterModel.getNextNomor(conn, idBarang)}`
+    let idKloterFinal
+    let tglExpFinal = tanggalKedaluwarsa
+    let stokGudangFinal = jumlah
+
+    if (idKloterPilihan) {
+      const [existingKloter] = await conn.query(
+        'SELECT * FROM kloter_stok WHERE id_kloter = ? AND id_barang = ? AND is_deleted = 0 FOR UPDATE',
+        [idKloterPilihan, idBarang]
+      )
+      if (existingKloter.length === 0) {
+        throw new AppError('Kloter yang dipilih tidak ditemukan pada barang ini.', 404)
+      }
+      idKloterFinal = idKloterPilihan
+      namaKloter = existingKloter[0].nama_kloter
+      tglExpFinal = existingKloter[0].tanggal_kedaluwarsa
+      stokGudangFinal = Number(existingKloter[0].stok_gudang) + jumlah
+
+      await conn.query(
+        'UPDATE kloter_stok SET stok_gudang = stok_gudang + ? WHERE id_kloter = ?',
+        [jumlah, idKloterFinal]
+      )
+    } else {
+      if (!namaKloter) {
+        namaKloter = `Kloter ${await kloterModel.getNextNomor(conn, idBarang)}`
+      }
+
+      idKloterFinal = await kloterModel.create(conn, {
+        idBarang,
+        namaKloter,
+        tanggalKedaluwarsa: tglExpFinal,
+        stokGudang: jumlah,
+      })
     }
 
-    const idKloter = await kloterModel.create(conn, {
-      idBarang,
-      namaKloter,
-      tanggalKedaluwarsa,
-      stokGudang: jumlah,
-    })
-
     const idMasuk = await barangMasukModel.create(conn, {
-      idKloter,
+      idKloter: idKloterFinal,
       jumlah,
       tanggalMasuk,
-      lokasiRak,
+      lokasiRak: lokasiRak || null,
       catatan,
       idUser: req.user.id_user,
     })
@@ -77,17 +110,17 @@ exports.createBarangMasuk = asyncHandler(async (req, res) => {
 
     result = {
       id_masuk: idMasuk,
-      id_kloter: idKloter,
+      id_kloter: idKloterFinal,
       id_barang: barang.id_barang,
       sku: barang.sku,
       nama_barang: barang.nama_barang,
       nama_kloter: namaKloter,
       jumlah,
       tanggal_masuk: tanggalMasuk,
-      tanggal_kedaluwarsa: tanggalKedaluwarsa,
+      tanggal_kedaluwarsa: tglExpFinal,
       lokasi_rak: lokasiRak,
       catatan,
-      stok_gudang: jumlah,
+      stok_gudang: stokGudangFinal,
       stok_display: 0,
     }
   } catch (err) {

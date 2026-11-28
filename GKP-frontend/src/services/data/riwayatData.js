@@ -1,10 +1,9 @@
-// Daftar jenis aktivitas (opsi dropdown filter Riwayat). Ini adalah data
-// referensi statis, bukan data transaksi/mock dummy — log aktivitas SELALU
-// dimulai kosong (lihat App.jsx: useState([])), sesuai ketentuan
-// "No Dummy Data & No Persistence" pada dokumen revisi.
+// Daftar jenis aktivitas (opsi dropdown filter Riwayat).
 
 export const jenisAktivitasList = [
+  { value: 'barang', label: 'Kelola Data Barang' },
   { value: 'masuk', label: 'Barang Masuk' },
   { value: 'pergerakan', label: 'Pergerakan Barang' },
-  { value: 'opname', label: 'Stock Opname' },
+  { value: 'stok', label: 'Penyesuaian Stok' },
+  { value: 'opname', label: 'Stok Opname' },
 ]

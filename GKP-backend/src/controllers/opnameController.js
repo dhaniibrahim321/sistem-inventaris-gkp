@@ -11,7 +11,7 @@ const STATUS_VALID = ['sesuai', 'kurang', 'lebih']
 const daftarForm = asyncHandler(async (req, res) => {
   const search = String(req.query.search ?? '').trim()
   const { data } = await stokModel.daftar({
-    search, kategori: '', status: '', batas: 0,
+    search, brand: '', status: '', batas: 0,
     likeSearch: likeTerm(search), limit: MAKS_ITEM, offset: 0,
   })
   res.json({ success: true, data })
@@ -31,9 +31,10 @@ const simpan = asyncHandler(async (req, res) => {
   const bersih = items.map((it, i) => {
     const idKloter = requirePositiveInt(it?.id_kloter, `items[${i}].id_kloter`)
     const fisik = requireNonNegativeInt(it?.stok_fisik, `items[${i}].stok_fisik`)
+    const catatan = it?.catatan ? String(it.catatan).slice(0, 500) : null
     if (dilihat.has(idKloter)) throw new AppError(`Kloter ${idKloter} muncul lebih dari sekali.`, 400)
     dilihat.add(idKloter)
-    return { id_kloter: idKloter, stok_fisik: fisik }
+    return { id_kloter: idKloter, stok_fisik: fisik, catatan }
   })
 
   const data = await model.simpan({ tanggal, items: bersih, idUser: req.user.id_user })

@@ -4,17 +4,16 @@
 // Model data satu kloter (disimpan di item.kloter[]):
 //   {
 //     id, nomor,
-//     jumlahAwal,      // jumlah yang dimasukkan ke gudang saat pencatatan (TOTAL, tidak berubah)
+//     jumlahAwal,      // jumlah total masuk dari log_barang_masuk untuk kloter ini
 //     stokGudang,      // sisa di gudang untuk kloter ini
 //     stokDisplay,     // sisa di display untuk kloter ini
 //     tanggalMasuk, tanggalKadaluarsa, lokasiRak, catatan,
 //   }
 //
 // Aturan penting:
-//  - Total kloter = jumlahAwal. Mengurangi stok hanya mengurangi stokDisplay,
-//    jadi total tetap sama dengan jumlah yang dimasukkan awal.
-//  - item.stokGudang / item.stokDisplay (level produk) selalu = jumlah dari
-//    seluruh kloter, supaya halaman lain yang membaca field itu tetap benar.
+//  - Total tersedia kloter = stokGudang + stokDisplay, sehingga penyesuaian atau
+//    koreksi stok kloter langsung memperbarui Total pcs.
+//  - jumlahAwal tetap dipertahankan sebagai acuan jumlah masuk awal kloter.
 
 export const SEMUA_KLOTER = 'all'
 
@@ -37,17 +36,21 @@ export function normalisasiKloter(k) {
 
 export function hitungAgregat(kloterList) {
   return kloterList.reduce(
-    (acc, k) => ({
-      stokGudang: acc.stokGudang + k.stokGudang,
-      stokDisplay: acc.stokDisplay + k.stokDisplay,
-      total: acc.total + k.jumlahAwal,
-    }),
+    (acc, k) => {
+      const gudang = Number(k.stokGudang ?? 0)
+      const display = Number(k.stokDisplay ?? 0)
+      return {
+        stokGudang: acc.stokGudang + gudang,
+        stokDisplay: acc.stokDisplay + display,
+        total: acc.total + gudang + display,
+      }
+    },
     { stokGudang: 0, stokDisplay: 0, total: 0 }
   )
 }
 
 // Susun ulang item setelah daftar kloternya berubah: field level produk
-// (stokGudang, stokDisplay) ikut dihitung ulang dari kloter.
+// (stokGudang, stokDisplay, totalStok) ikut dihitung ulang dari kloter.
 export function buatItemDenganKloter(item, kloterList) {
   const agregat = hitungAgregat(kloterList)
   return {
@@ -55,6 +58,7 @@ export function buatItemDenganKloter(item, kloterList) {
     kloter: kloterList,
     stokGudang: agregat.stokGudang,
     stokDisplay: agregat.stokDisplay,
+    totalStok: agregat.total,
     stok_gudang: agregat.stokGudang,
     stok_display: agregat.stokDisplay,
   }
@@ -113,7 +117,7 @@ export function getStokView(item, kloterKey = SEMUA_KLOTER) {
     kloter,
     gudang: kloter.stokGudang,
     display: kloter.stokDisplay,
-    total: kloter.jumlahAwal,
+    total: kloter.stokGudang + kloter.stokDisplay,
     kadaluarsa: kloter.tanggalKadaluarsa || '',
   }
 }

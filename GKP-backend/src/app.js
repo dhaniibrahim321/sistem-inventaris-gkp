@@ -8,16 +8,10 @@ const { notFound, errorHandler } = require('./middleware/errorHandler')
 
 const app = express()
 
-// 1. HTTP Security Headers (menyembunyikan identitas Express & proteksi header)
+app.set('trust proxy', 1)
 app.use(helmet())
-
-// 2. CORS: Mengizinkan request dari frontend
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }))
-
-// 3. Rate Limiter: Melindungi semua endpoint /api dari flooding/spam
 app.use('/api', apiLimiter)
-
-// 4. Body parser dengan batas wajar (5 MB untuk payload data-URL gambar)
 app.use(express.json({ limit: '5mb' }))
 
 app.use('/api', routes)

@@ -1,10 +1,15 @@
 import { useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Navigate, Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Header from './Header'
 
 export default function MainLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const token = localStorage.getItem('token') || localStorage.getItem('sigkp_token')
+
+  if (!token) {
+    return <Navigate to="/" replace />
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">

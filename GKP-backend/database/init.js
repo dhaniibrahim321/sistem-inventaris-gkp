@@ -1,4 +1,3 @@
-// Menjalankan schema.sql ke server MySQL. Pemakaian: npm run db:init
 require('dotenv').config()
 const fs = require('fs')
 const path = require('path')
@@ -16,6 +15,21 @@ async function main() {
   const dbName = process.env.DB_NAME || 'sigkp'
   sql = sql.replace(/sigkp/g, dbName)
   await conn.query(sql)
+
+  const [cols] = await conn.query(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'users' AND COLUMN_NAME = 'status'`,
+    [dbName]
+  )
+  if (cols.length === 0) {
+    await conn.query(
+      `ALTER TABLE \`${dbName}\`.users
+       ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'aktif' AFTER role,
+       ADD CONSTRAINT chk_users_status CHECK (status IN ('pending', 'aktif', 'ditolak', 'nonaktif'))`
+    )
+  }
+
   await conn.end()
   console.log(`Database "${dbName}" siap dipakai.`)
 }

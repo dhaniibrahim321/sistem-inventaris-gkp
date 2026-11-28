@@ -2,7 +2,7 @@ import apiClient from './apiClient'
 
 /**
  * Mengambil daftar stok barang beserta kloter per barang
- * @param {Object} params - { search, kategori, status, batas, limit, page }
+ * @param {Object} params - { search, brand, status, batas, limit, page }
  */
 export async function getDaftarStok(params = {}) {
   const response = await apiClient.get('/stok', { params })

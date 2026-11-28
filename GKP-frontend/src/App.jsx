@@ -102,7 +102,7 @@ async function refreshData() {
 
             <Route
               path="/riwayat"
-              element={<RiwayatPage riwayat={riwayat} />}
+              element={<RiwayatPage riwayat={riwayat} setRiwayat={setRiwayat} />}
             />
 
             <Route path="/pengaturan" element={<SettingsPage />} />

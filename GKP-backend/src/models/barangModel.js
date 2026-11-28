@@ -1,11 +1,10 @@
-
 const pool = require('../config/db');
 
 // ==========================================
 // CRUD BARANG
 // ==========================================
 
-async function getAll(q = '', kategori = '') {
+async function getAll(q = '', brand = '') {
   const keyword = `%${String(q).trim()}%`;
 
   const [rows] = await pool.query(
@@ -13,19 +12,20 @@ async function getAll(q = '', kategori = '') {
       b.id_barang,
       b.sku,
       b.nama_barang,
-      b.kategori,
+      b.varian,
+      b.brand,
       b.foto_url,
       COALESCE(SUM(k.stok_gudang), 0) AS stok_gudang,
       COALESCE(SUM(k.stok_display), 0) AS stok_display,
       COALESCE(SUM(k.stok_gudang + k.stok_display), 0) AS total_stok
     FROM barang b
-    LEFT JOIN kloter_stok k ON b.id_barang = k.id_barang
+    LEFT JOIN kloter_stok k ON b.id_barang = k.id_barang AND k.is_deleted = 0
     WHERE b.is_deleted = 0
-      AND (b.sku LIKE ? OR b.nama_barang LIKE ?)
-      AND (? = '' OR b.kategori = ?)
+      AND (b.sku LIKE ? OR b.nama_barang LIKE ? OR b.varian LIKE ? OR b.brand LIKE ?)
+      AND (? = '' OR b.brand = ?)
     GROUP BY b.id_barang
     ORDER BY b.id_barang DESC`,
-    [keyword, keyword, kategori, kategori]
+    [keyword, keyword, keyword, keyword, brand, brand]
   );
 
   const [kloterRows] = await pool.query(
@@ -43,6 +43,7 @@ async function getAll(q = '', kategori = '') {
        MAX(m.catatan) AS catatan
      FROM kloter_stok k
      LEFT JOIN log_barang_masuk m ON m.id_kloter = k.id_kloter
+     WHERE k.is_deleted = 0
      GROUP BY k.id_kloter
      ORDER BY k.id_barang, nomor ASC, k.id_kloter ASC`
   );
@@ -81,7 +82,7 @@ async function getById(id) {
       COALESCE(SUM(k.stok_display), 0) AS stok_display,
       COALESCE(SUM(k.stok_gudang + k.stok_display), 0) AS total_stok
     FROM barang b
-    LEFT JOIN kloter_stok k ON b.id_barang = k.id_barang
+    LEFT JOIN kloter_stok k ON b.id_barang = k.id_barang AND k.is_deleted = 0
     WHERE b.id_barang = ? AND b.is_deleted = 0
     GROUP BY b.id_barang`,
     [id]
@@ -97,10 +98,12 @@ async function create(data) {
     await conn.beginTransaction();
 
     const [result] = await conn.query(
-      `INSERT INTO barang (sku, nama_barang, kategori, foto_url)
-       VALUES (?, ?, ?, ?)`,
-      [data.sku, data.nama, data.kategori, data.foto]
+      `INSERT INTO barang (sku, nama_barang, varian, brand, foto_url)
+       VALUES (?, ?, ?, ?, ?)`,
+      [data.sku, data.nama, data.varian || null, data.brand || null, data.foto]
     );
+
+    const namaLog = data.varian ? `${data.nama} (${data.varian})` : data.nama;
 
     await conn.query(
       `INSERT INTO log_aktivitas
@@ -109,7 +112,7 @@ async function create(data) {
       [
         'barang',
         data.sku,
-        data.nama,
+        namaLog,
         'Menambahkan data barang baru.',
         data.oleh
       ]
@@ -143,10 +146,12 @@ async function update(id, data) {
 
     await conn.query(
       `UPDATE barang
-       SET sku = ?, nama_barang = ?, kategori = ?, foto_url = ?
+       SET sku = ?, nama_barang = ?, varian = ?, brand = ?, foto_url = ?
        WHERE id_barang = ?`,
-      [data.sku, data.nama, data.kategori, data.foto, id]
+      [data.sku, data.nama, data.varian || null, data.brand || null, data.foto, id]
     );
+
+    const namaLog = data.varian ? `${data.nama} (${data.varian})` : data.nama;
 
     await conn.query(
       `INSERT INTO log_aktivitas
@@ -155,7 +160,7 @@ async function update(id, data) {
       [
         'barang',
         data.sku,
-        data.nama,
+        namaLog,
         'Memperbarui data barang.',
         data.oleh
       ]
@@ -188,6 +193,7 @@ async function softDelete(id, oleh) {
     }
 
     const barang = rows[0];
+    const namaLog = barang.varian ? `${barang.nama_barang} (${barang.varian})` : barang.nama_barang;
 
     await conn.query(
       `INSERT INTO log_aktivitas
@@ -196,7 +202,7 @@ async function softDelete(id, oleh) {
       [
         'barang',
         barang.sku,
-        barang.nama_barang,
+        namaLog,
         'Menghapus data barang.',
         oleh
       ]
@@ -223,7 +229,7 @@ async function softDelete(id, oleh) {
 
 async function findActiveById(idBarang, db = pool) {
   const [rows] = await db.query(
-    `SELECT id_barang, sku, nama_barang, kategori
+    `SELECT id_barang, sku, nama_barang, varian, brand
      FROM barang
      WHERE id_barang = ? AND is_deleted = 0
      LIMIT 1`,
@@ -235,7 +241,7 @@ async function findActiveById(idBarang, db = pool) {
 
 async function lockActiveById(conn, idBarang) {
   const [rows] = await conn.query(
-    `SELECT id_barang, sku, nama_barang
+    `SELECT id_barang, sku, nama_barang, varian, brand
      FROM barang
      WHERE id_barang = ? AND is_deleted = 0
      FOR UPDATE`,

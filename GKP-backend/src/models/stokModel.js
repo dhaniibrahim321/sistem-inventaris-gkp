@@ -36,7 +36,7 @@ function olahKloter(k) {
 async function ambilKloterUntukBarang(idBarangList) {
   if (idBarangList.length === 0) return new Map()
   const [rows] = await pool.query(
-    `${KLOTER_SELECT} WHERE k.id_barang IN (?) ORDER BY k.tanggal_kedaluwarsa ASC, k.id_kloter ASC`,
+    `${KLOTER_SELECT} WHERE k.id_barang IN (?) AND k.is_deleted = 0 ORDER BY k.tanggal_kedaluwarsa ASC, k.id_kloter ASC`,
     [idBarangList]
   )
   const peta = new Map()
@@ -48,16 +48,16 @@ async function ambilKloterUntukBarang(idBarangList) {
 }
 
 // Daftar stok per barang (+ daftar kloter di tiap barang).
-async function daftar({ search, kategori, status, batas, limit, offset, likeSearch }) {
-  const where = []
+async function daftar({ search, brand, status, batas, limit, offset, likeSearch }) {
+  const where = ['b.is_deleted = 0']
   const params = []
   if (search) {
-    where.push('(b.sku LIKE ? OR b.nama_barang LIKE ? OR b.kategori LIKE ?)')
-    params.push(likeSearch, likeSearch, likeSearch)
+    where.push('(b.sku LIKE ? OR b.nama_barang LIKE ? OR b.varian LIKE ? OR b.brand LIKE ?)')
+    params.push(likeSearch, likeSearch, likeSearch, likeSearch)
   }
-  if (kategori) {
-    where.push('b.kategori = ?')
-    params.push(kategori)
+  if (brand) {
+    where.push('b.brand = ?')
+    params.push(brand)
   }
 
   const having = []
@@ -67,16 +67,16 @@ async function daftar({ search, kategori, status, batas, limit, offset, likeSear
   if (status === 'tersedia') { having.push('total > ?'); havingParams.push(batas) }
 
   const base = `
-    SELECT b.id_barang, b.sku, b.nama_barang, b.kategori,
+    SELECT b.id_barang, b.sku, b.nama_barang, b.varian, b.brand,
            COALESCE(SUM(k.stok_gudang), 0)  AS stok_gudang,
            COALESCE(SUM(k.stok_display), 0) AS stok_display,
            COALESCE(SUM(k.stok_gudang + k.stok_display), 0) AS total,
            COUNT(k.id_kloter) AS jumlah_kloter,
            MIN(CASE WHEN k.stok_gudang + k.stok_display > 0 THEN k.tanggal_kedaluwarsa END) AS kedaluwarsa_terdekat
     FROM barang b
-    LEFT JOIN kloter_stok k ON k.id_barang = b.id_barang
+    LEFT JOIN kloter_stok k ON k.id_barang = b.id_barang AND k.is_deleted = 0
     ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-    GROUP BY b.id_barang, b.sku, b.nama_barang, b.kategori
+    GROUP BY b.id_barang, b.sku, b.nama_barang, b.varian, b.brand
     ${having.length ? 'HAVING ' + having.join(' AND ') : ''}
   `
   const allParams = [...params, ...havingParams]
@@ -91,7 +91,8 @@ async function daftar({ search, kategori, status, batas, limit, offset, likeSear
     id_barang: r.id_barang,
     sku: r.sku,
     nama_barang: r.nama_barang,
-    kategori: r.kategori,
+    varian: r.varian || '',
+    brand: r.brand || '',
     stok_gudang: Number(r.stok_gudang),
     stok_display: Number(r.stok_display),
     total: Number(r.total),
@@ -105,7 +106,7 @@ async function daftar({ search, kategori, status, batas, limit, offset, likeSear
 
 async function detailBarang(idBarang, batas) {
   const [[b]] = await pool.query(
-    'SELECT id_barang, sku, nama_barang, kategori, foto_url FROM barang WHERE id_barang = ?',
+    'SELECT id_barang, sku, nama_barang, varian, brand, foto_url FROM barang WHERE id_barang = ? AND is_deleted = 0',
     [idBarang]
   )
   if (!b) throw new AppError('Barang tidak ditemukan.', 404)

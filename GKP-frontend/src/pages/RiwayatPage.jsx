@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Search } from 'lucide-react'
 import { Select, Badge, Table } from '../components/common'
 import { sortRiwayatTerbaru } from '../services/riwayatService'
 import { jenisAktivitasList } from '../services/data/riwayatData'
 import { formatTanggal } from '../utils/dateHelpers'
+import { getRiwayat } from '../services/api'
 
 const jenisBadge = {
   barang: <Badge variant="info">Kelola Data Barang</Badge>,
@@ -14,7 +15,24 @@ const jenisBadge = {
   opname: <Badge variant="warning">Stok Opname</Badge>,
 }
 
-export default function RiwayatPage({ riwayat }) {
+export default function RiwayatPage({ riwayat, setRiwayat }) {
+  useEffect(() => {
+    let cancelled = false
+    if (typeof setRiwayat === 'function') {
+      getRiwayat()
+        .then((data) => {
+          if (!cancelled && Array.isArray(data)) {
+            setRiwayat(data)
+          }
+        })
+        .catch((err) => {
+          console.warn('Gagal menyinkronkan riwayat aktivitas:', err.message)
+        })
+    }
+    return () => {
+      cancelled = true
+    }
+  }, [setRiwayat])
   const { state: lokasiState } = useLocation()
   const asal = lokasiState?.dariDashboard ? lokasiState : null
 

@@ -36,7 +36,8 @@ CREATE TABLE IF NOT EXISTS barang (
   id_barang    INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   sku          VARCHAR(50)  NOT NULL,
   nama_barang  VARCHAR(150) NOT NULL,
-  kategori     VARCHAR(100) NOT NULL,
+  varian       VARCHAR(100) NULL,
+  brand        VARCHAR(100) NULL,
   foto_url     MEDIUMTEXT   NULL,                 -- URL atau data-URL base64 (<= 2 MB dari frontend)
   is_deleted   TINYINT(1)   NOT NULL DEFAULT 0,
   created_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -44,7 +45,7 @@ CREATE TABLE IF NOT EXISTS barang (
   CONSTRAINT uq_barang_sku UNIQUE (sku),
   CONSTRAINT chk_barang_deleted CHECK (is_deleted IN (0, 1)),
   INDEX idx_barang_aktif_nama (is_deleted, nama_barang),
-  INDEX idx_barang_kategori (kategori)
+  INDEX idx_barang_brand (brand)
 ) ENGINE=InnoDB;
 
 -- ---------------------------------------------------------------------
@@ -86,7 +87,6 @@ CREATE TABLE IF NOT EXISTS log_barang_masuk (
   created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_masuk_kloter FOREIGN KEY (id_kloter) REFERENCES kloter_stok(id_kloter) ON DELETE RESTRICT,
   CONSTRAINT fk_masuk_user   FOREIGN KEY (id_user)   REFERENCES users(id_user)         ON DELETE RESTRICT,
-  CONSTRAINT uq_masuk_kloter UNIQUE (id_kloter),
   CONSTRAINT chk_masuk_jumlah CHECK (jumlah > 0),
   -- Riwayat terbaru + pagination: ORDER BY tanggal_masuk DESC, id_masuk DESC
   INDEX idx_masuk_tgl (tanggal_masuk, id_masuk),
@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS log_pergerakan (
   id_kloter       INT UNSIGNED  NOT NULL,
   jumlah_pindah   INT UNSIGNED  NOT NULL,
   tanggal_pindah  DATE          NOT NULL,
-  letak_rak       VARCHAR(100)  NOT NULL,
+  letak_rak       VARCHAR(100)  NULL,
   catatan         VARCHAR(1000) NULL,
   id_user         INT UNSIGNED  NOT NULL,
   created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -120,11 +120,16 @@ CREATE TABLE IF NOT EXISTS log_pergerakan (
 CREATE TABLE IF NOT EXISTS stok_opname (
   id_opname            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   id_kloter            INT UNSIGNED NOT NULL,
+  sku                  VARCHAR(50)  NULL,
+  nama_barang          VARCHAR(150) NULL,
+  varian               VARCHAR(100) NULL,
+  brand                VARCHAR(100) NULL,
   tanggal_opname       DATE         NOT NULL,
   stok_sistem_display  INT UNSIGNED NOT NULL,
   stok_fisik_display   INT UNSIGNED NOT NULL,
   selisih              INT          NOT NULL,
   status               ENUM('sesuai','kurang','lebih') NOT NULL,
+  catatan              VARCHAR(500) NULL,
   id_user              INT UNSIGNED NOT NULL,
   created_at           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_opname_kloter FOREIGN KEY (id_kloter) REFERENCES kloter_stok(id_kloter) ON DELETE RESTRICT,

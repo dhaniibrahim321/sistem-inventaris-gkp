@@ -416,13 +416,14 @@ export default function DashboardPage({ barang = [], riwayat = [] }) {
           setApiData({
             ringkasan: ringkasan.status === 'fulfilled' ? ringkasan.value : null,
             statistik: statistik.status === 'fulfilled' ? statistik.value : null,
-            stokKritisGudang:
+                  stokKritisGudang:
               kritis.status === 'fulfilled' && Array.isArray(kritis.value?.gudang)
                 ? kritis.value.gudang.map((b) => ({
                     id: b.id_barang,
                     sku: b.sku,
                     nama: b.nama_barang,
-                    kategori: b.kategori,
+                    varian: b.varian || '',
+                    brand: b.brand || '',
                     gambar: b.foto_url,
                     stokGudang: Number(b.stok_gudang),
                     stokDisplay: Number(b.stok_display),
@@ -434,7 +435,8 @@ export default function DashboardPage({ barang = [], riwayat = [] }) {
                     id: b.id_barang,
                     sku: b.sku,
                     nama: b.nama_barang,
-                    kategori: b.kategori,
+                    varian: b.varian || '',
+                    brand: b.brand || '',
                     gambar: b.foto_url,
                     stokGudang: Number(b.stok_gudang),
                     stokDisplay: Number(b.stok_display),
@@ -447,7 +449,8 @@ export default function DashboardPage({ barang = [], riwayat = [] }) {
                       id: k.id_barang,
                       sku: k.sku,
                       nama: k.nama_barang,
-                      kategori: k.kategori,
+                      varian: k.varian || '',
+                      brand: k.brand || '',
                       gambar: k.foto_url,
                     },
                     kloter: {

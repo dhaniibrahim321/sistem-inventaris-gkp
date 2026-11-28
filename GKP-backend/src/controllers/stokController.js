@@ -12,14 +12,14 @@ function batasMenipis(q) {
 const daftar = asyncHandler(async (req, res) => {
   const pg = parsePagination(req.query, { defaultLimit: 20, maxLimit: 1000 })
   const search = String(req.query.search ?? '').trim()
-  const kategori = String(req.query.kategori ?? '').trim()
+  const brand = String(req.query.brand ?? '').trim()
   const status = req.query.status ? String(req.query.status).toLowerCase() : ''
   if (status && !STATUS_VALID.includes(status)) {
     throw new AppError(`status harus salah satu dari: ${STATUS_VALID.join(', ')}.`, 400)
   }
 
   const { data, total } = await model.daftar({
-    search, kategori, status,
+    search, brand, status,
     batas: batasMenipis(req.query),
     likeSearch: likeTerm(search),
     limit: pg.limit, offset: pg.offset,

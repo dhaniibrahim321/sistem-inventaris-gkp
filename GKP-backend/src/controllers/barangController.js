@@ -9,8 +9,8 @@ const {
 
 // GET: Menampilkan semua barang
 const getAll = asyncHandler(async (req, res) => {
-  const { q = '', kategori = '' } = req.query;
-  const data = await barangModel.getAll(q, kategori);
+  const { q = '', brand = '' } = req.query;
+  const data = await barangModel.getAll(q, brand);
 
   res.json({
     success: true,
@@ -43,7 +43,8 @@ const create = asyncHandler(async (req, res) => {
   const data = {
     sku: requireString(req.body.sku, 'SKU'),
     nama: requireString(req.body.nama_barang, 'Nama barang'),
-    kategori: requireString(req.body.kategori, 'Kategori'),
+    varian: optionalString(req.body.varian, 'Varian', { max: 100 }) || null,
+    brand: optionalString(req.body.brand, 'Brand', { max: 100 }) || null,
     foto: optionalString(req.body.foto_url),
     oleh: req.user.nama
   };
@@ -68,7 +69,8 @@ const update = asyncHandler(async (req, res) => {
   const data = {
     sku: requireString(req.body.sku, 'SKU'),
     nama: requireString(req.body.nama_barang, 'Nama barang'),
-    kategori: requireString(req.body.kategori, 'Kategori'),
+    varian: optionalString(req.body.varian, 'Varian', { max: 100 }) || null,
+    brand: optionalString(req.body.brand, 'Brand', { max: 100 }) || null,
     foto: optionalString(req.body.foto_url),
     oleh: req.user.nama
   };

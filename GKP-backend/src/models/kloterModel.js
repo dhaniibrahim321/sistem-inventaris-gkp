@@ -36,7 +36,7 @@ async function lockActiveWithBarang(conn, idKloter) {
   const [rows] = await conn.query(
     `SELECT k.id_kloter, k.id_barang, k.nama_kloter, k.tanggal_kedaluwarsa,
             k.stok_gudang, k.stok_display,
-            b.sku, b.nama_barang,
+            b.sku, b.nama_barang, b.varian, b.brand,
             (SELECT m.tanggal_masuk FROM log_barang_masuk m
               WHERE m.id_kloter = k.id_kloter LIMIT 1) AS tanggal_masuk
      FROM kloter_stok k

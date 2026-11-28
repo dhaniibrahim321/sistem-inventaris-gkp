@@ -62,7 +62,7 @@ function hitungStatus(view, stokMinimum) {
   return 'Tersedia'
 }
 
-function KadaluarsaCell({ tanggal }) {
+function KadaluarsaCell({ tanggal, kloterNomor }) {
   if (!tanggal) return <span className="text-slate-300">-</span>
 
   const sisa = sisaHari(tanggal)
@@ -70,15 +70,22 @@ function KadaluarsaCell({ tanggal }) {
   let keterangan = null
 
   if (sisa !== null && sisa <= 0) {
-    warna = 'text-rose-600 font-medium'
+    warna = 'text-rose-600 font-semibold'
     keterangan = 'Kedaluwarsa'
   } else if (sisa !== null && sisa <= BATAS_KEDALUWARSA_HARI) {
     warna = 'text-amber-700 font-medium'
+    keterangan = `${sisa} hari lagi`
+  } else if (sisa !== null) {
     keterangan = `${sisa} hari lagi`
   }
 
   return (
     <div>
+      {kloterNomor && (
+        <span className="inline-block mb-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#8A7CD9]/15 text-[#5B528D]">
+          Kloter {kloterNomor}
+        </span>
+      )}
       <p className={warna}>{formatTanggal(tanggal)}</p>
       {keterangan && (
         <p className="text-[11px] text-slate-400">{keterangan}</p>
@@ -104,11 +111,12 @@ export default function StokBarangPage({
           id: b.id_barang,
           sku: b.sku,
           nama: b.nama_barang,
-          kategori: b.kategori,
+          varian: b.varian || '',
+          brand: b.brand || '',
           gambar: b.foto_url,
           stokGudang: Number(b.stok_gudang || 0),
           stokDisplay: Number(b.stok_display || 0),
-          totalStok: Number(b.total_stok || 0),
+          totalStok: Number(b.total || b.total_stok || 0),
           kloter: (b.kloter || []).map((k) => ({
             id: k.id_kloter,
             nomor: String(k.nama_kloter || '').replace(/[^0-9]/g, '') || k.nama_kloter || 1,
@@ -164,6 +172,9 @@ export default function StokBarangPage({
       : {}
   )
 
+  // Filter Kedaluwarsa dalam bulan (kosong = tampilkan semua)
+  const [bulanKedaluwarsa, setBulanKedaluwarsa] = useState('')
+
   // Modal: { type: 'edit' | 'kurangi' | 'hapus', itemId, kloterId }
   const [modal, setModal] = useState(null)
   const [stokGudang, setStokGudang] = useState('')
@@ -179,13 +190,14 @@ export default function StokBarangPage({
   const rows = useMemo(() => {
     const keyword = search.toLowerCase().trim()
 
-    return barangAktif
+    const list = barangAktif
       .filter((item) => {
         if (!keyword) return true
         return (
           String(item.sku || '').toLowerCase().includes(keyword) ||
           String(item.nama || '').toLowerCase().includes(keyword) ||
-          String(item.kategori || '').toLowerCase().includes(keyword)
+          String(item.varian || '').toLowerCase().includes(keyword) ||
+          String(item.brand || '').toLowerCase().includes(keyword)
         )
       })
       .map((item) => {
@@ -202,7 +214,27 @@ export default function StokBarangPage({
           status: hitungStatus(view, stokMinimum),
         }
       })
-  }, [barangAktif, search, pilihanKloter])
+      .filter((row) => {
+        if (bulanKedaluwarsa === '') return true
+        const bulan = Number(bulanKedaluwarsa)
+        if (!Number.isFinite(bulan) || bulan < 0) return true
+        const sisa = sisaHari(row.view.kadaluarsa)
+        if (sisa === null) return false
+        const maxHari = bulan === 0 ? 0 : bulan * 30
+        return sisa <= maxHari
+      })
+
+    // Prioritaskan ke atas jika filter kedaluwarsa aktif:
+    if (bulanKedaluwarsa !== '') {
+      list.sort((a, b) => {
+        const sa = sisaHari(a.view.kadaluarsa) ?? 99999
+        const sb = sisaHari(b.view.kadaluarsa) ?? 99999
+        return sa - sb
+      })
+    }
+
+    return list
+  }, [barangAktif, search, pilihanKloter, bulanKedaluwarsa])
 
   /* =========================================
      MODAL
@@ -292,6 +324,10 @@ export default function StokBarangPage({
       })
       await muatDataStok()
     } catch (apiErr) {
+      if (apiErr.response?.data?.message) {
+        setError(apiErr.response.data.message)
+        return
+      }
       console.warn('Backend sesuaikan stok error, fallback lokal:', apiErr.message)
     }
 
@@ -305,13 +341,16 @@ export default function StokBarangPage({
     }
 
     if (setRiwayat && (gudang !== gudangLama || display !== displayLama)) {
+      const namaLog = modalItem.varian
+        ? `${modalItem.nama} (${modalItem.varian})`
+        : modalItem.nama
       setRiwayat((prev) =>
         tambahRiwayat(
           prev,
           buatEntriRiwayat({
             jenis: 'stok',
             sku: modalItem.sku,
-            nama: modalItem.nama,
+            nama: namaLog,
             kloter: modalKloter.nomor,
             keterangan:
               `Stok Kloter ${modalKloter.nomor} disesuaikan manual. ` +
@@ -357,6 +396,10 @@ export default function StokBarangPage({
       })
       await muatDataStok()
     } catch (apiErr) {
+      if (apiErr.response?.data?.message) {
+        setError(apiErr.response.data.message)
+        return
+      }
       console.warn('Backend kurangi stok error, fallback lokal:', apiErr.message)
     }
 
@@ -367,19 +410,21 @@ export default function StokBarangPage({
     }
 
     if (setRiwayat) {
+      const namaLog = modalItem.varian
+        ? `${modalItem.nama} (${modalItem.varian})`
+        : modalItem.nama
       setRiwayat((prev) =>
         tambahRiwayat(
           prev,
           buatEntriRiwayat({
             jenis: 'stok',
             sku: modalItem.sku,
-            nama: modalItem.nama,
+            nama: namaLog,
             kloter: modalKloter.nomor,
             keterangan:
               `Stok Kloter ${modalKloter.nomor} dikurangi -${jumlah} ${satuan}. ` +
               `Display ${modalKloter.stokDisplay} → ${displayBaru}. ` +
-              `Total kloter tetap ${modalKloter.jumlahAwal}.` +
-              (catatanTrim ? ` Catatan: ${catatanTrim}` : ''),
+              (catatanTrim ? `Catatan: ${catatanTrim}` : ''),
           })
         )
       )
@@ -448,7 +493,7 @@ export default function StokBarangPage({
   ========================================== */
 
   const itemFokus = fokus
-    ? barang.find((item) => item.id === fokus.barangId) || null
+    ? barangAktif.find((item) => item.id === fokus.barangId) || null
     : null
   const kloterFokus = itemFokus
     ? getKloterList(itemFokus).find(
@@ -462,10 +507,26 @@ export default function StokBarangPage({
 
   const columns = [
     { key: 'sku', label: 'SKU' },
-    { key: 'nama', label: 'Nama Barang' },
     {
-      key: 'kategori',
-      label: 'Kategori',
+      key: 'nama',
+      label: 'Nama Barang',
+      render: (_, row) => (
+        <p className="font-medium text-slate-800">{row.nama}</p>
+      ),
+    },
+    {
+      key: 'varian',
+      label: 'Varian',
+      render: (value) =>
+        value ? (
+          <Badge variant="purple">{value}</Badge>
+        ) : (
+          <span className="text-slate-400 text-xs">-</span>
+        ),
+    },
+    {
+      key: 'brand',
+      label: 'Brand',
       render: (value) => <Badge variant="default">{value || '-'}</Badge>,
     },
     {
@@ -498,7 +559,18 @@ export default function StokBarangPage({
     {
       key: 'kadaluarsa',
       label: 'Kedaluwarsa',
-      render: (_, row) => <KadaluarsaCell tanggal={row.view.kadaluarsa} />,
+      render: (_, row) => {
+        const kloterNomor = row.view.kloter
+          ? row.view.kloter.nomor
+          : row.kloterList.find((k) => k.tanggalKadaluarsa === row.view.kadaluarsa)?.nomor ||
+            (row.kloterList[0]?.nomor ?? null)
+        return (
+          <KadaluarsaCell
+            tanggal={row.view.kadaluarsa}
+            kloterNomor={kloterNomor}
+          />
+        )
+      },
     },
     {
       key: 'stokGudang',
@@ -585,31 +657,65 @@ export default function StokBarangPage({
         </p>
       </header>
 
-      {barang.length === 0 ? (
+      {barangAktif.length === 0 && !loading ? (
         <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-10 text-center text-sm text-slate-400">
           Belum ada data barang. Tambahkan barang lewat halaman Kelola Data
           Barang terlebih dahulu.
         </section>
       ) : (
         <>
-          <section aria-label="Pencarian stok">
+          <section aria-label="Pencarian dan Filter Kedaluwarsa stok">
             <Card>
-              <div className="relative">
-                <Search
-                  size={16}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                />
-                <label htmlFor="cari-stok" className="sr-only">
-                  Cari SKU, nama barang, atau kategori
-                </label>
-                <input
-                  id="cari-stok"
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Cari SKU, nama barang, atau kategori..."
-                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#8A7CD9] focus:border-[#8A7CD9]"
-                />
+              <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
+                <div className="relative flex-1">
+                  <Search
+                    size={16}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+                  <label htmlFor="cari-stok" className="sr-only">
+                    Cari SKU, nama barang, varian, atau brand
+                  </label>
+                  <input
+                    id="cari-stok"
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Cari SKU, nama barang, varian, atau brand..."
+                    className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#8A7CD9] focus:border-[#8A7CD9]"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <label
+                    htmlFor="filter-exp-bulan"
+                    className="text-xs font-semibold text-slate-600 whitespace-nowrap"
+                  >
+                    Filter Kedaluwarsa (&le; Bulan):
+                  </label>
+                  <input
+                    id="filter-exp-bulan"
+                    type="number"
+                    min="0"
+                    max="120"
+                    value={bulanKedaluwarsa}
+                    onChange={(e) => setBulanKedaluwarsa(e.target.value)}
+                    placeholder="Semua"
+                    aria-label="Filter batas bulan kedaluwarsa"
+                    className="w-24 px-3 py-2 rounded-lg border border-slate-300 text-sm text-center bg-white focus:outline-none focus:ring-2 focus:ring-[#8A7CD9] focus:border-[#8A7CD9]"
+                  />
+                  <span className="text-xs font-medium text-slate-500 whitespace-nowrap">
+                    Bulan
+                  </span>
+                  {bulanKedaluwarsa !== '' && (
+                    <button
+                      type="button"
+                      onClick={() => setBulanKedaluwarsa('')}
+                      className="text-xs font-medium text-[#5B528D] hover:underline whitespace-nowrap"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
               </div>
             </Card>
           </section>

@@ -1,5 +1,4 @@
 // Helper Brand Barang.
-//
 // Daftar brand untuk saran pengetikan dan filter diturunkan langsung dari
 // data barang yang sudah pernah diinput user.
 
@@ -26,3 +25,4 @@ export function samakanBrand(input, barang = []) {
   )
   return cocok ?? teks
 }
+

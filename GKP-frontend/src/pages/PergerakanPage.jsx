@@ -49,12 +49,13 @@ export default function PergerakanPage({
           id: b.id_barang,
           sku: b.sku,
           nama: b.nama_barang,
-          kategori: b.kategori,
+          varian: b.varian || "",
+          brand: b.brand || "",
           satuan: b.satuan || "pcs",
           gambar: b.foto_url || null,
           stokGudang: Number(b.stok_gudang || 0),
           stokDisplay: Number(b.stok_display || 0),
-          totalStok: Number(b.total || 0),
+          totalStok: Number(b.total || b.total_stok || 0),
           kloter: (b.kloter || []).map((k) => ({
             id: k.id_kloter,
             nomor: String(k.nama_kloter || "").replace(/[^0-9]/g, "") || k.nama_kloter || 1,
@@ -135,8 +136,15 @@ export default function PergerakanPage({
       ).toLowerCase();
 
       const sku = String(item.sku || "").toLowerCase();
+      const varian = String(item.varian || "").toLowerCase();
+      const brand = String(item.brand || "").toLowerCase();
 
-      return nama.includes(keyword) || sku.includes(keyword);
+      return (
+        nama.includes(keyword) ||
+        sku.includes(keyword) ||
+        varian.includes(keyword) ||
+        brand.includes(keyword)
+      );
     });
   }, [barangAktif, search]);
 
@@ -205,11 +213,6 @@ export default function PergerakanPage({
       return;
     }
 
-    if (!rakDisplay.trim()) {
-      setError("Letak rak display wajib diisi.");
-      return;
-    }
-
     if (!tanggal) {
       setError("Tanggal pengisian wajib diisi.");
       return;
@@ -222,7 +225,7 @@ export default function PergerakanPage({
         id_kloter: Number(stokView.kloter.id),
         jumlah_pindah: jumlahTransfer,
         tanggal_pindah: tanggal,
-        letak_rak: rakDisplay.trim(),
+        letak_rak: rakDisplay ? rakDisplay.trim() : '',
         catatan: catatan.trim() || undefined,
       };
       await simpanPergerakan(payload);
@@ -239,15 +242,19 @@ export default function PergerakanPage({
       }
 
       if (setRiwayat) {
-        const namaBarang =
+        const namaDasar =
           selectedBarang.nama ||
           selectedBarang.namaBarang ||
           selectedBarang.name ||
           "-";
+        const namaBarang = selectedBarang.varian
+          ? `${namaDasar} (${selectedBarang.varian})`
+          : namaDasar;
 
         const sku = selectedBarang.sku || "-";
         const satuan = selectedBarang.satuan || "pcs";
         const catatanTrim = catatan.trim();
+        const rakTrim = rakDisplay.trim();
 
         setRiwayat((prev) =>
           tambahRiwayat(
@@ -261,7 +268,7 @@ export default function PergerakanPage({
               kloter: stokView.kloter.nomor,
               keterangan:
                 `Dipindahkan +${jumlahTransfer} ${satuan} dari Gudang ke Display (Kloter ${stokView.kloter.nomor}). ` +
-                `Rak display: ${rakDisplay.trim()}. ` +
+                (rakTrim ? `Rak display: ${rakTrim}. ` : "") +
                 `Tanggal pengisian: ${tanggal}. ` +
                 `Stok gudang ${stokGudang} → ${stokGudang - jumlahTransfer}, ` +
                 `display ${stokDisplay} → ${stokDisplay + jumlahTransfer}.` +
@@ -302,14 +309,7 @@ export default function PergerakanPage({
         </p>
       </div>
 
-      {success && (
-        <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-          <CheckCircle2 size={20} className="shrink-0" />
-          <span>{success}</span>
-        </div>
-      )}
-
-      {error && (
+      {!selectedBarang && error && (
         <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <AlertTriangle size={20} className="shrink-0" />
           <span>{error}</span>
@@ -403,16 +403,19 @@ export default function PergerakanPage({
                         </div>
 
                         <div className="min-w-0 flex-1">
-                          <p className="truncate font-semibold text-gray-800">
-                            {nama}
-                          </p>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <p className="truncate font-semibold text-gray-800">
+                              {nama}
+                            </p>
+                            {item.varian && (
+                              <span className="rounded bg-[#8A7CD9]/15 px-1.5 py-0.5 text-[11px] font-medium text-[#5B528D]">
+                                {item.varian}
+                              </span>
+                            )}
+                          </div>
 
                           <p className="mt-1 text-xs text-gray-500">
-                            SKU: {sku}
-                          </p>
-
-                          <p className="mt-1 text-xs text-gray-500">
-                            {item.kategori || "Tanpa kategori"}
+                            SKU: {sku} • Brand: {item.brand || "-"}
                           </p>
                         </div>
 
@@ -478,20 +481,23 @@ export default function PergerakanPage({
                     </div>
 
                     <div>
-                      <h3 className="font-semibold text-gray-800">
-                        {selectedBarang.nama ||
-                          selectedBarang.namaBarang ||
-                          selectedBarang.name ||
-                          "-"}
-                      </h3>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <h3 className="font-semibold text-gray-800">
+                          {selectedBarang.nama ||
+                            selectedBarang.namaBarang ||
+                            selectedBarang.name ||
+                            "-"}
+                        </h3>
+                        {selectedBarang.varian && (
+                          <span className="rounded bg-[#8A7CD9]/15 px-2 py-0.5 text-[11px] font-medium text-[#5B528D]">
+                            {selectedBarang.varian}
+                          </span>
+                        )}
+                      </div>
 
                       <p className="mt-1 text-sm text-gray-500">
-                        SKU: {selectedBarang.sku || "-"}
-                      </p>
-
-                      <p className="mt-1 text-sm text-gray-500">
-                        {selectedBarang.kategori ||
-                          "Tanpa kategori"}
+                        SKU: {selectedBarang.sku || "-"} • Brand:{" "}
+                        {selectedBarang.brand || "-"}
                       </p>
                     </div>
                   </div>
@@ -642,29 +648,6 @@ export default function PergerakanPage({
 
                     <div>
                       <label className="mb-2 block text-sm font-medium text-gray-700">
-                        Letak Rak Display
-                      </label>
-
-                      <div className="relative">
-                        <MapPin
-                          size={18}
-                          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                        />
-
-                        <input
-                          type="text"
-                          value={rakDisplay}
-                          onChange={(e) =>
-                            setRakDisplay(e.target.value)
-                          }
-                          placeholder="Contoh: Rak Display A-01"
-                          className="w-full rounded-lg border border-gray-300 py-2.5 pl-10 pr-4 text-sm outline-none focus:border-[#8A7CD9] focus:ring-2 focus:ring-[#8A7CD9]/20"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-gray-700">
                         Catatan
                       </label>
 
@@ -685,6 +668,20 @@ export default function PergerakanPage({
                         />
                       </div>
                     </div>
+
+                    {error && (
+                      <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        <AlertTriangle size={20} className="shrink-0" />
+                        <span>{error}</span>
+                      </div>
+                    )}
+
+                    {success && (
+                      <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                        <CheckCircle2 size={20} className="shrink-0" />
+                        <span>{success}</span>
+                      </div>
+                    )}
 
                     <button
                       type="submit"

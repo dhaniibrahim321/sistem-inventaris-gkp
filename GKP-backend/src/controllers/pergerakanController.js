@@ -44,7 +44,7 @@ exports.createPergerakan = asyncHandler(async (req, res) => {
     max: maxJumlahTransaksi(),
   })
   const tanggalPindah = requireDate(body.tanggal_pindah, 'Tanggal pindah')
-  const letakRak = requireString(body.letak_rak, 'Letak rak display', { max: 100 })
+  const letakRak = optionalString(body.letak_rak, 'Letak rak display', { max: 100 }) || ''
   const catatan = optionalString(body.catatan, 'Catatan', { max: 1000 })
 
   if (tanggalPindah > todayInAppTimezone()) {

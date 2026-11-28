@@ -50,7 +50,7 @@ async function findAll(filters, { limit, offset }, db = pool) {
 
   const [rows] = await db.query(
     `SELECT p.id_pergerakan, p.id_kloter, k.nama_kloter, k.tanggal_kedaluwarsa,
-            b.id_barang, b.sku, b.nama_barang,
+            b.id_barang, b.sku, b.nama_barang, b.varian, b.brand,
             p.jumlah_pindah, p.tanggal_pindah, p.letak_rak, p.catatan,
             p.id_user, u.nama AS nama_user, p.created_at
      ${FROM_JOIN}
